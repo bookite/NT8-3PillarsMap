@@ -1389,9 +1389,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 string text = lbl + " " + FormatPrice(price);
                 try
                 {
-                    Draw.Text(this, labelTag, text, 0, price, 4,
-                              labelColor, new SimpleFont("Courier New", fontSize),
-                              TextAlignment.Left, Brushes.Transparent, Brushes.Transparent, 0);
+                    Draw.Text(this, labelTag, text, 0, price, labelColor);
                     if (!drawnTags.Contains(labelTag)) drawnTags.Add(labelTag);
                 }
                 catch (Exception ex)
@@ -1536,9 +1534,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Brush  lblColor = WithOpacity(ConfluenceZoneColor, 0.80);
                 try
                 {
-                    Draw.Text(this, lblTag, lbl, 0, midPrice, 0,
-                              lblColor, new SimpleFont("Courier New", 8),
-                              TextAlignment.Left, Brushes.Transparent, Brushes.Transparent, 0);
+                    Draw.Text(this, lblTag, lbl, 0, midPrice, lblColor);
                     if (!drawnTags.Contains(lblTag)) drawnTags.Add(lblTag);
                 }
                 catch { }
@@ -1852,6 +1848,120 @@ namespace NinjaTrader.NinjaScript.Indicators
         #endregion
     }
 }
+
+#region NinjaScript generated code. Neither change nor remove.
+
+namespace NinjaTrader.NinjaScript.Indicators
+{
+	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
+	{
+		private ThreePillarsMap[] cacheThreePillarsMap;
+		public ThreePillarsMap ThreePillarsMap()
+		{
+			return ThreePillarsMap(Input);
+		}
+
+		public ThreePillarsMap ThreePillarsMap(ISeries<double> input)
+		{
+			if (cacheThreePillarsMap != null)
+				for (int idx = 0; idx < cacheThreePillarsMap.Length; idx++)
+					if (cacheThreePillarsMap[idx] != null &&  cacheThreePillarsMap[idx].EqualsInput(input))
+						return cacheThreePillarsMap[idx];
+			return CacheIndicator<ThreePillarsMap>(new ThreePillarsMap(), input, ref cacheThreePillarsMap);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
+{
+	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
+	{
+		public Indicators.ThreePillarsMap ThreePillarsMap()
+		{
+			return indicator.ThreePillarsMap(Input);
+		}
+
+		public Indicators.ThreePillarsMap ThreePillarsMap(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMap(input);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.Strategies
+{
+	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
+	{
+		public Indicators.ThreePillarsMap ThreePillarsMap()
+		{
+			return indicator.ThreePillarsMap(Input);
+		}
+
+		public Indicators.ThreePillarsMap ThreePillarsMap(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMap(input);
+		}
+	}
+}
+
+#endregion
+
+#region NinjaScript generated code. Neither change nor remove.
+
+namespace NinjaTrader.NinjaScript.Indicators
+{
+	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
+	{
+		private ThreePillarsMap[] cacheThreePillarsMap;
+		public ThreePillarsMap ThreePillarsMap()
+		{
+			return ThreePillarsMap(Input);
+		}
+
+		public ThreePillarsMap ThreePillarsMap(ISeries<double> input)
+		{
+			if (cacheThreePillarsMap != null)
+				for (int idx = 0; idx < cacheThreePillarsMap.Length; idx++)
+					if (cacheThreePillarsMap[idx] != null &&  cacheThreePillarsMap[idx].EqualsInput(input))
+						return cacheThreePillarsMap[idx];
+			return CacheIndicator<ThreePillarsMap>(new ThreePillarsMap(), input, ref cacheThreePillarsMap);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
+{
+	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
+	{
+		public Indicators.ThreePillarsMap ThreePillarsMap()
+		{
+			return indicator.ThreePillarsMap(Input);
+		}
+
+		public Indicators.ThreePillarsMap ThreePillarsMap(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMap(input);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.Strategies
+{
+	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
+	{
+		public Indicators.ThreePillarsMap ThreePillarsMap()
+		{
+			return indicator.ThreePillarsMap(Input);
+		}
+
+		public Indicators.ThreePillarsMap ThreePillarsMap(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMap(input);
+		}
+	}
+}
+
+#endregion
 
 #region NinjaScript generated code. Neither change nor remove.
 
