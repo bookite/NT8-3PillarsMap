@@ -80,6 +80,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Windows;
 using System.Windows.Media;
 using System.Xml.Serialization;
 using NinjaTrader.Cbi;
@@ -1390,7 +1391,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 string text = lbl + " " + FormatPrice(price);
                 try
                 {
-                    Draw.Text(this, labelTag, false, text, 0, price, 4,
+                    Draw.Text(this, labelTag, text, 0, price, 4,
                               labelColor, new SimpleFont("Courier New", fontSize),
                               TextAlignment.Left, Brushes.Transparent, Brushes.Transparent, 0, true, "");
                     if (!drawnTags.Contains(labelTag)) drawnTags.Add(labelTag);
@@ -1524,9 +1525,9 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 try
                 {
-                    var rect = Draw.Rectangle(this, czTag, false,
+                    Draw.Rectangle(this, czTag, false,
                         CurrentBar, zone.high, 0, zone.low,
-                        borderBrush, fillBrush, opacity * 100.0, true, "");
+                        borderBrush, fillBrush, opacity * 100.0);
                     if (!drawnTags.Contains(czTag)) drawnTags.Add(czTag);
                 }
                 catch (Exception ex) { Print(LOG_PREFIX + " DrawRect error: " + ex.Message); }
@@ -1537,7 +1538,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Brush  lblColor = WithOpacity(ConfluenceZoneColor, 0.80);
                 try
                 {
-                    Draw.Text(this, lblTag, false, lbl, 0, midPrice, 0,
+                    Draw.Text(this, lblTag, lbl, 0, midPrice, 0,
                               lblColor, new SimpleFont("Courier New", 8),
                               TextAlignment.Left, Brushes.Transparent, Brushes.Transparent, 0, true, "");
                     if (!drawnTags.Contains(lblTag)) drawnTags.Add(lblTag);
@@ -1708,7 +1709,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 Draw.TextFixed(this, TAG_PREFIX + "LEGEND", sb.ToString(), tp,
                     textBrush, new SimpleFont("Courier New", 8),
-                    Brushes.Transparent, bgBrush, 40.0);
+                    Brushes.Transparent, bgBrush, 40);
             }
             catch (Exception ex) { Print(LOG_PREFIX + " Legend error: " + ex.Message); }
         }
