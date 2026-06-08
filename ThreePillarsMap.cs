@@ -872,9 +872,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 DrawLegend();
             }
 
-            // â”€â”€ Rebuild walls when price drifts out of the current cluster window (live only) â”€â”€
-            if (State == State.Realtime && lastWallBuildPrice > 0
-                && Math.Abs(Close[0] - lastWallBuildPrice) > GetClusterTolerance())
+            // â”€â”€ Rebuild walls when price drifts, so R/S sides stay correct as price moves â”€â”€
+            if (lastWallBuildPrice > 0
+                && Math.Abs(Close[0] - lastWallBuildPrice) > GetClusterTolerance() * 0.5)
                 BuildAndDrawWalls();
 
             // â”€â”€ OPENING RANGE TRACKING â”€â”€
