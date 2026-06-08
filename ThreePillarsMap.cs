@@ -194,7 +194,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             public double Price;
             public string Code;
             public double Weight;
-            public bool   IsAnchor;
+            public bool   IsAnchor;   // prior-day refs: always shown
+            public bool   IsKey;      // HTF refs: shown when within range even if lone
         }
 
         private class Wall
@@ -1525,44 +1526,44 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private void GatherCandidates(List<LevelCandidate> c)
         {
-            void Add(double p, string code, double w, bool anchor)
-            { if (p > 0) c.Add(new LevelCandidate { Price = p, Code = code, Weight = w, IsAnchor = anchor }); }
+            void Add(double p, string code, double w, bool anchor, bool key)
+            { if (p > 0) c.Add(new LevelCandidate { Price = p, Code = code, Weight = w, IsAnchor = anchor, IsKey = key }); }
 
-            // Anchors â€” always-on reference levels
-            Add(lvlYH,  "YH",  2.5, true);
-            Add(lvlYL,  "YL",  2.5, true);
-            Add(lvlYC,  "YC",  1.5, true);
-            Add(lvlPOC, "POC", 3.0, true);
-            Add(lvlVAH, "VAH", 2.0, true);
-            Add(lvlVAL, "VAL", 2.0, true);
+            // Anchors â€” prior-day refs, always shown
+            Add(lvlYH,  "YH",  2.5, true,  false);
+            Add(lvlYL,  "YL",  2.5, true,  false);
+            Add(lvlYC,  "YC",  1.5, true,  false);
+            Add(lvlPOC, "POC", 3.0, true,  false);
+            Add(lvlVAH, "VAH", 2.0, true,  false);
+            Add(lvlVAL, "VAL", 2.0, true,  false);
 
             // Overnight
-            Add(lvlONH, "ONH", 1.5, false);
-            Add(lvlONL, "ONL", 1.5, false);
+            Add(lvlONH, "ONH", 1.5, false, false);
+            Add(lvlONL, "ONL", 1.5, false, false);
             // Pivots
-            Add(lvlPP, "PP", 1.5, false);
-            Add(lvlR1, "R1", 1.2, false);
-            Add(lvlS1, "S1", 1.2, false);
-            Add(lvlR2, "R2", 1.0, false);
-            Add(lvlS2, "S2", 1.0, false);
-            Add(lvlR3, "R3", 0.8, false);
-            Add(lvlS3, "S3", 0.8, false);
-            // Weekly
-            Add(lvlPWH,     "PWH",  2.5, false);
-            Add(lvlPWL,     "PWL",  2.5, false);
-            Add(lvlWeekPOC, "WPOC", 2.5, false);
-            Add(lvlWeekVAH, "WVAH", 2.0, false);
-            Add(lvlWeekVAL, "WVAL", 2.0, false);
-            // Monthly
-            Add(lvlPMH, "PMH", 2.0, false);
-            Add(lvlPML, "PML", 2.0, false);
+            Add(lvlPP, "PP", 1.5, false, false);
+            Add(lvlR1, "R1", 1.2, false, false);
+            Add(lvlS1, "S1", 1.2, false, false);
+            Add(lvlR2, "R2", 1.0, false, false);
+            Add(lvlS2, "S2", 1.0, false, false);
+            Add(lvlR3, "R3", 0.8, false, false);
+            Add(lvlS3, "S3", 0.8, false, false);
+            // Weekly â€” PWH/PWL/WPOC are key (show lone when near price)
+            Add(lvlPWH,     "PWH",  2.5, false, true);
+            Add(lvlPWL,     "PWL",  2.5, false, true);
+            Add(lvlWeekPOC, "WPOC", 2.5, false, true);
+            Add(lvlWeekVAH, "WVAH", 2.0, false, false);
+            Add(lvlWeekVAL, "WVAL", 2.0, false, false);
+            // Monthly â€” key
+            Add(lvlPMH, "PMH", 2.0, false, true);
+            Add(lvlPML, "PML", 2.0, false, true);
             // Opening range (once complete)
-            if (orComplete) { Add(lvlORH, "ORH", 1.2, false); Add(lvlORL, "ORL", 1.2, false); }
+            if (orComplete) { Add(lvlORH, "ORH", 1.2, false, false); Add(lvlORL, "ORL", 1.2, false, false); }
             // 4H swings
             for (int k = 0; k < 3; k++)
             {
-                Add(lvlSwingH[k], "SH", 1.5, false);
-                Add(lvlSwingL[k], "SL", 1.5, false);
+                Add(lvlSwingH[k], "SH", 1.5, false, false);
+                Add(lvlSwingL[k], "SL", 1.5, false, false);
             }
         }
 
@@ -1596,13 +1597,15 @@ namespace NinjaTrader.NinjaScript.Indicators
         }
 
         private bool WallHasAnchor(Wall w) => ShowAnchors && w.Members.Any(m => m.IsAnchor);
+        private bool WallHasKey(Wall w)    => w.Members.Any(m => m.IsKey);
+        private bool WallAlwaysKeep(Wall w) => WallHasAnchor(w) || WallHasKey(w);
 
-        // Keep all anchor-bearing zones; cap pure confluence walls at MaxWallsPerSide by score
+        // Keep all anchor/key zones; cap pure confluence walls at MaxWallsPerSide by score
         private List<Wall> SelectSide(List<Wall> side)
         {
             var result = new List<Wall>();
-            result.AddRange(side.Where(WallHasAnchor));
-            result.AddRange(side.Where(w => !WallHasAnchor(w) && w.Count >= MinConfluence)
+            result.AddRange(side.Where(WallAlwaysKeep));
+            result.AddRange(side.Where(w => !WallAlwaysKeep(w) && w.Count >= MinConfluence)
                                 .OrderByDescending(w => w.Score)
                                 .Take(MaxWallsPerSide));
             return result;
@@ -1628,9 +1631,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             var below = new List<Wall>();
             foreach (var w in walls)
             {
-                bool hasAnchor = WallHasAnchor(w);
-                if (w.Count < MinConfluence && !hasAnchor) continue;
-                if (Math.Abs(w.Center - price) > rangeAbs && !hasAnchor) continue;
+                bool hasAnchor = WallHasAnchor(w);              // always shown
+                bool inRange   = Math.Abs(w.Center - price) <= rangeAbs;
+                bool keepLone  = hasAnchor || (WallHasKey(w) && inRange);
+                if (w.Count < MinConfluence && !keepLone) continue;   // lone non-key minor level
+                if (!inRange && !hasAnchor) continue;                 // out of range (key needs range too)
                 if (w.Center >= price) above.Add(w); else below.Add(w);
             }
 
