@@ -439,7 +439,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 int    fs    = isWall ? Math.Max(8, LabelFontSize) : Math.Max(7, LabelFontSize - 2);
                 try
                 {
-                    Draw.Text(this, tagLbl, true, text, 0, w.Center, 0,
+                    Draw.Text(this, tagLbl, true, text, -5, w.Center, 0,
                         txt, new SimpleFont("Arial", fs),
                         System.Windows.TextAlignment.Left,
                         Brushes.Transparent, WithOpacity(Brushes.Black, 0.70), 70);
@@ -475,12 +475,20 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (!ShowLegend) { try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { } return; }
 
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("THREE PILLARS - DAILY WALLS " + VERSION);
-            sb.AppendLine("Band = price tested repeatedly; thicker = more touches");
-            sb.AppendLine("  **  2x    ***  3x    ****  4+ touches");
-            sb.AppendLine("R = resistance (above)   S = support (below)");
-            sb.AppendLine("S/R = level flipped roles (strongest)");
-            sb.AppendLine("Dotted = recent swing + range hi/lo (boundaries)");
+            sb.AppendLine("═══ THREE PILLARS  DAILY " + VERSION + " ═════════════");
+            sb.AppendLine("  Band = price tested repeatedly at same level");
+            sb.AppendLine("  Thicker + brighter = more swing touches");
+            sb.AppendLine("    **  2 touches    ***  3 touches");
+            sb.AppendLine("    ****  4+ touches  (strongest wall)");
+            sb.AppendLine("─────────────────────────────────────────");
+            sb.AppendLine("  R = resistance  (above current price)");
+            sb.AppendLine("  S = support     (below current price)");
+            sb.AppendLine("  S/R = polarity flip zone  (strongest)");
+            sb.AppendLine("  ····  recent swing / range boundary");
+            sb.AppendLine("─────────────────────────────────────────");
+            sb.AppendLine("  H = swing high   L = swing low");
+            sb.AppendLine("  S/R = tested as both H and L (flip)");
+            sb.Append    ("  RH/RL = range high / low  (no lag)");
 
             TextPosition tp;
             switch (LegendPosition)
@@ -495,13 +503,127 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 Draw.TextFixed(this, TAG_PREFIX + "LEGEND", sb.ToString(), tp,
                     Brushes.White, new SimpleFont("Courier New", 11),
-                    Brushes.Gray, WithOpacity(Brushes.Black, 0.80), 85);
+                    Brushes.SteelBlue, WithOpacity(Brushes.Black, 0.85), 90);
             }
             catch (Exception ex) { Print(LOG_PREFIX + " Legend error: " + ex.Message); }
         }
         #endregion
     }
 }
+
+#region NinjaScript generated code. Neither change nor remove.
+
+namespace NinjaTrader.NinjaScript.Indicators
+{
+	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
+	{
+		private ThreePillarsMapHTF[] cacheThreePillarsMapHTF;
+		public ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return ThreePillarsMapHTF(Input);
+		}
+
+		public ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input)
+		{
+			if (cacheThreePillarsMapHTF != null)
+				for (int idx = 0; idx < cacheThreePillarsMapHTF.Length; idx++)
+					if (cacheThreePillarsMapHTF[idx] != null &&  cacheThreePillarsMapHTF[idx].EqualsInput(input))
+						return cacheThreePillarsMapHTF[idx];
+			return CacheIndicator<ThreePillarsMapHTF>(new ThreePillarsMapHTF(), input, ref cacheThreePillarsMapHTF);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
+{
+	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
+	{
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return indicator.ThreePillarsMapHTF(Input);
+		}
+
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMapHTF(input);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.Strategies
+{
+	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
+	{
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return indicator.ThreePillarsMapHTF(Input);
+		}
+
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMapHTF(input);
+		}
+	}
+}
+
+#endregion
+
+#region NinjaScript generated code. Neither change nor remove.
+
+namespace NinjaTrader.NinjaScript.Indicators
+{
+	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
+	{
+		private ThreePillarsMapHTF[] cacheThreePillarsMapHTF;
+		public ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return ThreePillarsMapHTF(Input);
+		}
+
+		public ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input)
+		{
+			if (cacheThreePillarsMapHTF != null)
+				for (int idx = 0; idx < cacheThreePillarsMapHTF.Length; idx++)
+					if (cacheThreePillarsMapHTF[idx] != null &&  cacheThreePillarsMapHTF[idx].EqualsInput(input))
+						return cacheThreePillarsMapHTF[idx];
+			return CacheIndicator<ThreePillarsMapHTF>(new ThreePillarsMapHTF(), input, ref cacheThreePillarsMapHTF);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
+{
+	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
+	{
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return indicator.ThreePillarsMapHTF(Input);
+		}
+
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMapHTF(input);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.Strategies
+{
+	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
+	{
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return indicator.ThreePillarsMapHTF(Input);
+		}
+
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMapHTF(input);
+		}
+	}
+}
+
+#endregion
 
 #region NinjaScript generated code. Neither change nor remove.
 

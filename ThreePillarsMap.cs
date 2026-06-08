@@ -1718,7 +1718,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 int    fs   = isWall ? Math.Max(8, LabelFontSize) : Math.Max(7, LabelFontSize - 2);
                 try
                 {
-                    Draw.Text(this, tagLbl, true, text, 0, w.Center, 0,
+                    Draw.Text(this, tagLbl, true, text, -5, w.Center, 0,
                         txt, new SimpleFont("Arial", fs),
                         System.Windows.TextAlignment.Left,
                         Brushes.Transparent, WithOpacity(Brushes.Black, 0.70), 70);
@@ -1964,14 +1964,21 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (!ShowLegend) { try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { } return; }
 
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("THREE PILLARS - STRUCTURAL WALLS " + VERSION);
-            sb.AppendLine("Band = confluence zone; thicker + brighter = stronger");
-            sb.AppendLine("  **  2 levels    ***  3 levels    ****  4+ stacked");
-            sb.AppendLine("R = resistance (above)   S = support (below)");
-            sb.AppendLine("Dotted line = lone anchor (YH/YL/YC/POC/VAH/VAL)");
-            sb.AppendLine("HVOL = wall sits on heavy prior-day volume");
-            sb.AppendLine("Codes: YH/YL/YC  ONH/ONL  PP R1-3 S1-3  POC VAH/VAL");
-            sb.AppendLine("       PWH/PWL WPOC WVAH/WVAL  PMH/PML  SH/SL  ORH/ORL");
+            sb.AppendLine("═══ THREE PILLARS  WALLS " + VERSION + " ════════════");
+            sb.AppendLine("  Band = confluence zone");
+            sb.AppendLine("  Thicker + brighter = more stacked levels");
+            sb.AppendLine("    **  2 levels    ***  3 levels");
+            sb.AppendLine("    ****  4+ stacked  (strongest wall)");
+            sb.AppendLine("─────────────────────────────────────────");
+            sb.AppendLine("  R = resistance  (above current price)");
+            sb.AppendLine("  S = support     (below current price)");
+            sb.AppendLine("  ····  lone anchor  (dotted reference)");
+            sb.AppendLine("  HVOL = zone sits on heavy prior-day vol");
+            sb.AppendLine("─────────────────────────────────────────");
+            sb.AppendLine("  Codes: YH/YL/YC   ONH/ONL");
+            sb.AppendLine("  POC VAH/VAL   PP R1-3 S1-3");
+            sb.AppendLine("  PWH/PWL WPOC   PMH/PML");
+            sb.Append    ("  SH/SL   ORH/ORL");
 
             TextPosition tp;
             switch (LegendPosition)
@@ -1982,14 +1989,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 default:                           tp = TextPosition.TopLeft;     break;
             }
 
-            Brush textBrush = Brushes.White;
-            Brush bgBrush   = WithOpacity(Brushes.Black, 0.80);
-
             try
             {
                 Draw.TextFixed(this, TAG_PREFIX + "LEGEND", sb.ToString(), tp,
-                    textBrush, new SimpleFont("Courier New", 11),
-                    Brushes.Gray, bgBrush, 85);
+                    Brushes.White, new SimpleFont("Courier New", 11),
+                    Brushes.SteelBlue, WithOpacity(Brushes.Black, 0.85), 90);
             }
             catch (Exception ex) { Print(LOG_PREFIX + " Legend error: " + ex.Message); }
         }
