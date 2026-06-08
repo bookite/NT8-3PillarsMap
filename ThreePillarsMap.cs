@@ -1389,7 +1389,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 string text = lbl + " " + FormatPrice(price);
                 try
                 {
-                    Draw.Text(this, labelTag, text, 0, price, labelColor);
+                    // White text on a semi-transparent dark background for readability
+                    Draw.Text(this, labelTag, true, text, 0, price, 0,
+                        Brushes.White,
+                        new SimpleFont("Arial", fontSize),
+                        System.Windows.TextAlignment.Left,
+                        Brushes.Transparent,
+                        WithOpacity(Brushes.Black, 0.65),
+                        60);
                     if (!drawnTags.Contains(labelTag)) drawnTags.Add(labelTag);
                 }
                 catch (Exception ex)
@@ -1696,14 +1703,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 default:                           tp = TextPosition.TopLeft;     break;
             }
 
-            Brush textBrush = WithOpacity(Brushes.LightGray, 0.80);
-            Brush bgBrush   = WithOpacity(Brushes.Black, 0.40);
+            Brush textBrush = Brushes.White;
+            Brush bgBrush   = WithOpacity(Brushes.Black, 0.80);
 
             try
             {
                 Draw.TextFixed(this, TAG_PREFIX + "LEGEND", sb.ToString(), tp,
-                    textBrush, new SimpleFont("Courier New", 8),
-                    Brushes.Transparent, bgBrush, 40);
+                    textBrush, new SimpleFont("Courier New", 11),
+                    Brushes.Gray, bgBrush, 85);
             }
             catch (Exception ex) { Print(LOG_PREFIX + " Legend error: " + ex.Message); }
         }
