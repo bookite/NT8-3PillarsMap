@@ -184,6 +184,27 @@ namespace NinjaTrader.NinjaScript.Indicators
         private double                     dayProfileAvg   = 0;  // avg vol/level for confluence grading
         #endregion
 
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Wall Engine State
+        private readonly List<string> wallTags           = new List<string>();
+        private double                lastWallBuildPrice = 0;
+
+        private class LevelCandidate
+        {
+            public double Price;
+            public string Code;
+            public double Weight;
+            public bool   IsAnchor;
+        }
+
+        private class Wall
+        {
+            public double Hi, Lo, Center, Score;
+            public List<LevelCandidate> Members = new List<LevelCandidate>();
+            public int Count { get { return Members.Count; } }
+        }
+        #endregion
+
         // =================================================================
         #region Parameters â€” Chart Configuration
 
@@ -232,6 +253,55 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Show Verification Output", GroupName = "Display", Order = 8,
             Description = "Print all calculated level values to the Output window each session.")]
         public bool ShowVerificationOutput { get; set; }
+        #endregion
+
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Structural Walls
+
+        [Range(1, 15)]
+        [Display(Name = "Max Walls Per Side", GroupName = "Structural Walls", Order = 1,
+            Description = "Maximum confluence walls drawn above and below price.")]
+        public int MaxWallsPerSide { get; set; }
+
+        [Range(1, 5)]
+        [Display(Name = "Min Confluence", GroupName = "Structural Walls", Order = 2,
+            Description = "Minimum overlapping levels to qualify as a wall. 2 = only show real confluence.")]
+        public int MinConfluence { get; set; }
+
+        [Range(0.01, 0.50)]
+        [Display(Name = "Cluster Tolerance %", GroupName = "Structural Walls", Order = 3,
+            Description = "Levels within this percent of price merge into one wall. 0.05 = ~25 YM pts at 51000.")]
+        public double ClusterTolerancePercent { get; set; }
+
+        [Range(0.25, 10.0)]
+        [Display(Name = "Wall Range %", GroupName = "Structural Walls", Order = 4,
+            Description = "Only draw walls within this percent of current price (anchors always show).")]
+        public double WallRangePercent { get; set; }
+
+        [Display(Name = "Show Anchor Levels", GroupName = "Structural Walls", Order = 5,
+            Description = "Always show prior-day H/L/C and today's POC/VAH/VAL even when not in a wall.")]
+        public bool ShowAnchors { get; set; }
+
+        [XmlIgnore]
+        [Display(Name = "Resistance Wall Color", GroupName = "Structural Walls", Order = 6)]
+        public Brush ResistanceColor { get; set; }
+        [Browsable(false)]
+        public string ResistanceColorSerializable
+        { get { return Serialize.BrushToString(ResistanceColor); } set { ResistanceColor = Serialize.StringToBrush(value); } }
+
+        [XmlIgnore]
+        [Display(Name = "Support Wall Color", GroupName = "Structural Walls", Order = 7)]
+        public Brush SupportColor { get; set; }
+        [Browsable(false)]
+        public string SupportColorSerializable
+        { get { return Serialize.BrushToString(SupportColor); } set { SupportColor = Serialize.StringToBrush(value); } }
+
+        [XmlIgnore]
+        [Display(Name = "Anchor Level Color", GroupName = "Structural Walls", Order = 8)]
+        public Brush AnchorColor { get; set; }
+        [Browsable(false)]
+        public string AnchorColorSerializable
+        { get { return Serialize.BrushToString(AnchorColor); } set { AnchorColor = Serialize.StringToBrush(value); } }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -587,7 +657,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                 LineThicknessPrimary        = 2;
                 LineThicknessSecondary      = 1;
                 ShowConfluenceZones         = true;
-                ShowVerificationOutput      = true;
+                ShowVerificationOutput      = false;
+
+                // Structural Walls
+                MaxWallsPerSide             = 5;
+                MinConfluence               = 2;
+                ClusterTolerancePercent     = 0.05;
+                WallRangePercent            = 1.5;
+                ShowAnchors                 = true;
 
                 // Swing
                 SwingStrength               = 3;
@@ -653,6 +730,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 SwingLowColor               = Brushes.HotPink;
                 // Confluence
                 ConfluenceZoneColor         = Brushes.Yellow;
+                // Structural Walls
+                ResistanceColor             = Brushes.Crimson;
+                SupportColor                = Brushes.LimeGreen;
+                AnchorColor                 = Brushes.Silver;
             }
             else if (State == State.Configure)
             {
@@ -668,15 +749,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                 weekProfile    = new Dictionary<double, double>();
                 tier3Activated = new HashSet<string>();
                 drawnTags      = new List<string>();
+                wallTags.Clear();
+                lastWallBuildPrice = 0;
                 ResetLevels();
             }
             else if (State == State.Terminated)
             {
-                // Global draw objects persist by design; remove today's session tags
+                ClearWalls();
                 foreach (string t in drawnTags)
                     try { RemoveDrawObject(t); } catch { }
-                if (ShowLegend)
-                    try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { }
+                try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { }
             }
         }
 
@@ -785,16 +867,14 @@ namespace NinjaTrader.NinjaScript.Indicators
                     try { PrintVerificationOutput(barDate); }
                     catch (Exception ex) { Print(LOG_PREFIX + " ERROR in PrintVerificationOutput: " + ex.Message); }
 
-                DrawLevelsForRole();
-                DetectAndDrawConfluence();
+                BuildAndDrawWalls();
                 DrawLegend();
             }
 
-            // â”€â”€ UPDATE DYNAMIC CWH / CWL every bar â”€â”€
-            UpdateCurrentWeekExtremes();
-
-            // â”€â”€ TIER 3 PROXIMITY CHECK every bar â”€â”€
-            CheckProximityActivation();
+            // â”€â”€ Rebuild walls when price drifts out of the current cluster window (live only) â”€â”€
+            if (State == State.Realtime && lastWallBuildPrice > 0
+                && Math.Abs(Close[0] - lastWallBuildPrice) > GetClusterTolerance())
+                BuildAndDrawWalls();
 
             // â”€â”€ OPENING RANGE TRACKING â”€â”€
             if (instrumentHasOR && !orComplete)
@@ -806,9 +886,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
                 if (barTime >= orEnd && lvlORH > 0 && lvlORL > 0)
                 {
-                    DrawOpeningRangeLevels();
-                    DetectAndDrawConfluence();
                     orComplete = true;
+                    BuildAndDrawWalls();
                     Print(string.Format("{0} OR Complete: High={1} Low={2} Range={3} ticks",
                         LOG_PREFIX, lvlORH, lvlORL,
                         Math.Round(Math.Abs(lvlORH - lvlORL) / TickSize)));
@@ -1426,6 +1505,226 @@ namespace NinjaTrader.NinjaScript.Indicators
         #endregion
 
         // =================================================================
+        #region Structural Wall Engine
+
+        private double GetClusterTolerance()
+        {
+            double basePrice = Close[0] > 0 ? Close[0] : (lvlPOC > 0 ? lvlPOC : 1);
+            double tol = basePrice * (ClusterTolerancePercent / 100.0);
+            return Math.Max(tol, TickSize * 4);
+        }
+
+        private void ClearWalls()
+        {
+            foreach (string t in wallTags)
+                try { RemoveDrawObject(t); } catch { }
+            wallTags.Clear();
+        }
+
+        private void RegWall(string tag) { if (!wallTags.Contains(tag)) wallTags.Add(tag); }
+
+        private void GatherCandidates(List<LevelCandidate> c)
+        {
+            void Add(double p, string code, double w, bool anchor)
+            { if (p > 0) c.Add(new LevelCandidate { Price = p, Code = code, Weight = w, IsAnchor = anchor }); }
+
+            // Anchors â€” always-on reference levels
+            Add(lvlYH,  "YH",  2.5, true);
+            Add(lvlYL,  "YL",  2.5, true);
+            Add(lvlYC,  "YC",  1.5, true);
+            Add(lvlPOC, "POC", 3.0, true);
+            Add(lvlVAH, "VAH", 2.0, true);
+            Add(lvlVAL, "VAL", 2.0, true);
+
+            // Overnight
+            Add(lvlONH, "ONH", 1.5, false);
+            Add(lvlONL, "ONL", 1.5, false);
+            // Pivots
+            Add(lvlPP, "PP", 1.5, false);
+            Add(lvlR1, "R1", 1.2, false);
+            Add(lvlS1, "S1", 1.2, false);
+            Add(lvlR2, "R2", 1.0, false);
+            Add(lvlS2, "S2", 1.0, false);
+            Add(lvlR3, "R3", 0.8, false);
+            Add(lvlS3, "S3", 0.8, false);
+            // Weekly
+            Add(lvlPWH,     "PWH",  2.5, false);
+            Add(lvlPWL,     "PWL",  2.5, false);
+            Add(lvlWeekPOC, "WPOC", 2.5, false);
+            Add(lvlWeekVAH, "WVAH", 2.0, false);
+            Add(lvlWeekVAL, "WVAL", 2.0, false);
+            // Monthly
+            Add(lvlPMH, "PMH", 2.0, false);
+            Add(lvlPML, "PML", 2.0, false);
+            // Opening range (once complete)
+            if (orComplete) { Add(lvlORH, "ORH", 1.2, false); Add(lvlORL, "ORL", 1.2, false); }
+            // 4H swings
+            for (int k = 0; k < 3; k++)
+            {
+                Add(lvlSwingH[k], "SH", 1.5, false);
+                Add(lvlSwingL[k], "SL", 1.5, false);
+            }
+        }
+
+        private List<Wall> ClusterCandidates(List<LevelCandidate> cands, double tol)
+        {
+            cands.Sort((a, b) => a.Price.CompareTo(b.Price));
+            var walls = new List<Wall>();
+            int i = 0;
+            while (i < cands.Count)
+            {
+                var w = new Wall();
+                w.Lo = w.Hi = cands[i].Price;
+                w.Members.Add(cands[i]);
+                int j = i + 1;
+                while (j < cands.Count
+                       && cands[j].Price - w.Hi <= tol
+                       && cands[j].Price - w.Lo <= tol * 2.0)
+                {
+                    w.Hi = cands[j].Price;
+                    w.Members.Add(cands[j]);
+                    j++;
+                }
+                double wsum = 0, psum = 0;
+                foreach (var m in w.Members) { wsum += m.Weight; psum += m.Price * m.Weight; }
+                w.Score  = wsum;
+                w.Center = wsum > 0 ? psum / wsum : (w.Hi + w.Lo) / 2.0;
+                walls.Add(w);
+                i = j;
+            }
+            return walls;
+        }
+
+        private bool WallHasAnchor(Wall w) => ShowAnchors && w.Members.Any(m => m.IsAnchor);
+
+        // Keep all anchor-bearing zones; cap pure confluence walls at MaxWallsPerSide by score
+        private List<Wall> SelectSide(List<Wall> side)
+        {
+            var result = new List<Wall>();
+            result.AddRange(side.Where(WallHasAnchor));
+            result.AddRange(side.Where(w => !WallHasAnchor(w) && w.Count >= MinConfluence)
+                                .OrderByDescending(w => w.Score)
+                                .Take(MaxWallsPerSide));
+            return result;
+        }
+
+        private void BuildAndDrawWalls()
+        {
+            if (CurrentBar < 20) return;
+            ClearWalls();
+            lastWallBuildPrice = Close[0];
+
+            var cands = new List<LevelCandidate>();
+            GatherCandidates(cands);
+            if (cands.Count == 0) return;
+
+            double tol      = GetClusterTolerance();
+            double price    = Close[0];
+            double rangeAbs = price * (WallRangePercent / 100.0);
+
+            var walls = ClusterCandidates(cands, tol);
+
+            var above = new List<Wall>();
+            var below = new List<Wall>();
+            foreach (var w in walls)
+            {
+                bool hasAnchor = WallHasAnchor(w);
+                if (w.Count < MinConfluence && !hasAnchor) continue;
+                if (Math.Abs(w.Center - price) > rangeAbs && !hasAnchor) continue;
+                if (w.Center >= price) above.Add(w); else below.Add(w);
+            }
+
+            var keep = new List<Wall>();
+            keep.AddRange(SelectSide(above));
+            keep.AddRange(SelectSide(below));
+
+            int idx = 0;
+            foreach (var w in keep)
+                DrawWall(w, price, idx++);
+        }
+
+        private void DrawWall(Wall w, double price, int idx)
+        {
+            bool  isResistance = w.Center >= price;
+            bool  isWall       = w.Count >= 2;
+            Brush baseColor    = isWall ? (isResistance ? ResistanceColor : SupportColor) : AnchorColor;
+
+            string tagBand = TAG_PREFIX + "WALL" + idx;
+            string tagLine = tagBand + "_C";
+            string tagLbl  = tagBand + "_L";
+
+            // Member-code string (cap listed at 4)
+            var codes = w.Members.Select(m => m.Code).ToList();
+            string codeStr = codes.Count <= 4
+                ? string.Join("+", codes)
+                : string.Join("+", codes.Take(4)) + "+" + (codes.Count - 4);
+
+            if (isWall)
+            {
+                int   cnt     = w.Count;
+                int   opacity = cnt >= 4 ? 32 : cnt == 3 ? 22 : 12;
+                int   thick   = Math.Min(cnt, 4);
+                Brush fill    = WithOpacity(baseColor, opacity / 100.0);
+                Brush outline = WithOpacity(baseColor, 0.55);
+
+                double hi = w.Hi, lo = w.Lo;
+                if (hi - lo < TickSize) { hi += TickSize * 0.5; lo -= TickSize * 0.5; }
+
+                try
+                {
+                    Draw.RegionHighlightY(this, tagBand, false, hi, lo, outline, fill, opacity);
+                    RegWall(tagBand);
+                }
+                catch (Exception ex) { Print(LOG_PREFIX + " Wall band error: " + ex.Message); }
+
+                try
+                {
+                    Draw.HorizontalLine(this, tagLine, false, w.Center, baseColor, DashStyleHelper.Solid, thick);
+                    RegWall(tagLine);
+                }
+                catch (Exception ex) { Print(LOG_PREFIX + " Wall line error: " + ex.Message); }
+            }
+            else
+            {
+                // Lone anchor â€” quiet dotted reference line
+                try
+                {
+                    Draw.HorizontalLine(this, tagLine, false, w.Center,
+                        WithOpacity(baseColor, 0.55), DashStyleHelper.Dot, 1);
+                    RegWall(tagLine);
+                }
+                catch (Exception ex) { Print(LOG_PREFIX + " Anchor line error: " + ex.Message); }
+            }
+
+            if (ShowLabels)
+            {
+                string stars = w.Count >= 4 ? " ****" : w.Count == 3 ? " ***" : w.Count == 2 ? " **" : "";
+                string side  = isResistance ? "R" : "S";
+                string hvol  = "";
+                if (isWall && dayProfileAvg > 0)
+                {
+                    double zv = GetZoneVolume(w.Lo, w.Hi);
+                    int    n  = (int)Math.Round(Math.Abs(w.Hi - w.Lo) / TickSize) + 1;
+                    double za = n > 0 ? zv / n : 0;
+                    if (zv > 0 && za >= dayProfileAvg) hvol = "  HVOL";
+                }
+                string text = side + " " + FormatPrice(w.Center) + stars + "  " + codeStr + hvol;
+                Brush  txt  = isWall ? Brushes.White : WithOpacity(Brushes.White, 0.75);
+                int    fs   = isWall ? Math.Max(8, LabelFontSize) : Math.Max(7, LabelFontSize - 2);
+                try
+                {
+                    Draw.Text(this, tagLbl, true, text, 0, w.Center, 0,
+                        txt, new SimpleFont("Arial", fs),
+                        System.Windows.TextAlignment.Left,
+                        Brushes.Transparent, WithOpacity(Brushes.Black, 0.70), 70);
+                    RegWall(tagLbl);
+                }
+                catch (Exception ex) { Print(LOG_PREFIX + " Wall label error: " + ex.Message); }
+            }
+        }
+        #endregion
+
+        // =================================================================
         #region Proximity Activation (Tier 3)
 
         private void CheckProximityActivation()
@@ -1660,39 +1959,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (!ShowLegend) { try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { } return; }
 
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("â”€â”€ THREE PILLARS MAP " + VERSION + " â”€â”€");
-
-            // Only show lines for visible levels
-            if (ShowYH || ShowYL)
-                sb.AppendLine("YH = Yesterday High    YL = Yesterday Low");
-            if (ShowONH || ShowONL)
-                sb.AppendLine("ONH= Overnight High    ONL= Overnight Low");
-            if (ShowPOC || ShowVAH || ShowVAL)
-                sb.AppendLine("POC= Point of Control  VAH= Value Area High  VAL= Value Area Low");
-            if (ShowPivots)
-                sb.AppendLine("PP = Pivot Point       R1 = Resistance 1     S1 = Support 1");
-            if (ShowR2S2)
-                sb.AppendLine("R2 = Resistance 2      S2 = Support 2");
-            if (ShowR3S3)
-                sb.AppendLine("R3 = Resistance 3      S3 = Support 3");
-            if (ShowOR && instrumentHasOR)
-                sb.AppendLine("ORH= Opening Range Hi  ORL= Opening Range Lo");
-            if (ShowWeeklyLevels)
-                sb.AppendLine("PWH= Prior Week High   PWL= Prior Week Low   WPOC= Weekly POC");
-            if (ShowMonthlyLevels)
-                sb.AppendLine("PMH= Prior Month High  PML= Prior Month Low");
-            if (ShowSwingLevels)
-                sb.AppendLine("SH = Swing High (4H)   SL = Swing Low (4H)");
-            sb.AppendLine("â”€â”€ TIERS â”€â”€");
-            sb.AppendLine("THICK SOLID  = Tier 1 (always visible)");
-            sb.AppendLine("THIN DASHED  = Tier 2 (context)");
-            sb.AppendLine("THIN DOTTED  = Tier 3 (proximity activated)");
-            if (ShowConfluenceZones)
-            {
-                sb.AppendLine("â”€â”€ CONFLUENCE â”€â”€");
-                sb.AppendLine("HIGH VOL = Strong zone (volume confirmed)");
-                sb.AppendLine("LOW VOL  = Weaker zone (thin volume)");
-            }
+            sb.AppendLine("THREE PILLARS - STRUCTURAL WALLS " + VERSION);
+            sb.AppendLine("Band = confluence zone; thicker + brighter = stronger");
+            sb.AppendLine("  **  2 levels    ***  3 levels    ****  4+ stacked");
+            sb.AppendLine("R = resistance (above)   S = support (below)");
+            sb.AppendLine("Dotted line = lone anchor (YH/YL/YC/POC/VAH/VAL)");
+            sb.AppendLine("HVOL = wall sits on heavy prior-day volume");
+            sb.AppendLine("Codes: YH/YL/YC  ONH/ONL  PP R1-3 S1-3  POC VAH/VAL");
+            sb.AppendLine("       PWH/PWL WPOC WVAH/WVAL  PMH/PML  SH/SL  ORH/ORL");
 
             TextPosition tp;
             switch (LegendPosition)
