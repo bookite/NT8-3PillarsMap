@@ -68,9 +68,10 @@ namespace NinjaTrader.NinjaScript.Indicators
         private class LevelCandidate
         {
             public double Price;
-            public string Code;       // "H" or "L"
+            public string Code;       // "H" / "L" (swings), "RH" / "RL" (range extremes)
             public double Weight;
             public bool   IsAnchor;   // most-recent swings: always shown
+            public bool   IsKey;      // range extremes: shown when within range even if lone
         }
 
         private class Wall
@@ -185,7 +186,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 MinConfluence            = 2;
                 ClusterTolerancePercent  = 0.06;
                 WallRangePercent         = 5.0;
-                RecentSwingAnchors       = 2;
+                RecentSwingAnchors       = 1;
 
                 ResistanceColor          = Brushes.Crimson;
                 SupportColor             = Brushes.LimeGreen;
@@ -260,6 +261,20 @@ namespace NinjaTrader.NinjaScript.Indicators
                     Weight   = 1.0,
                     IsAnchor = idx < RecentSwingAnchors
                 });
+
+            // Range extremes - the boundaries price is working within. These capture
+            // the recent high/low even before a swing can be confirmed (no 3-bar lag).
+            int    span = Math.Min(CurrentBar, SwingLookbackBars);
+            double hh = double.MinValue, ll = double.MaxValue;
+            for (int i = 0; i <= span; i++)
+            {
+                if (High[i] > hh) hh = High[i];
+                if (Low[i]  < ll) ll = Low[i];
+            }
+            if (hh > double.MinValue)
+                c.Add(new LevelCandidate { Price = hh, Code = "RH", Weight = 1.5, IsAnchor = false, IsKey = true });
+            if (ll < double.MaxValue)
+                c.Add(new LevelCandidate { Price = ll, Code = "RL", Weight = 1.5, IsAnchor = false, IsKey = true });
         }
         #endregion
 
@@ -311,12 +326,14 @@ namespace NinjaTrader.NinjaScript.Indicators
         }
 
         private bool WallHasAnchor(Wall w) => w.Members.Any(m => m.IsAnchor);
+        private bool WallHasKey(Wall w)    => w.Members.Any(m => m.IsKey);
+        private bool WallAlwaysKeep(Wall w) => WallHasAnchor(w) || WallHasKey(w);
 
         private List<Wall> SelectSide(List<Wall> side)
         {
             var result = new List<Wall>();
-            result.AddRange(side.Where(WallHasAnchor));
-            result.AddRange(side.Where(w => !WallHasAnchor(w) && w.Count >= MinConfluence)
+            result.AddRange(side.Where(WallAlwaysKeep));
+            result.AddRange(side.Where(w => !WallAlwaysKeep(w) && w.Count >= MinConfluence)
                                 .OrderByDescending(w => w.Score)
                                 .Take(MaxWallsPerSide));
             return result;
@@ -340,9 +357,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             var below = new List<Wall>();
             foreach (var w in walls)
             {
-                bool hasAnchor = WallHasAnchor(w);
+                bool hasAnchor = WallHasAnchor(w);                       // recent swings: always
                 bool inRange   = Math.Abs(w.Center - price) <= rangeAbs;
-                if (w.Count < MinConfluence && !hasAnchor) continue;
+                bool keepLone  = hasAnchor || (WallHasKey(w) && inRange); // key = range extremes
+                if (w.Count < MinConfluence && !keepLone) continue;
                 if (!inRange && !hasAnchor) continue;
                 if (w.Center >= price) above.Add(w); else below.Add(w);
             }
@@ -366,8 +384,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             string tagLine = tagBand + "_C";
             string tagLbl  = tagBand + "_L";
 
-            bool hasH = w.Members.Any(m => m.Code == "H");
-            bool hasL = w.Members.Any(m => m.Code == "L");
+            bool hasH = w.Members.Any(m => m.Code == "H" || m.Code == "RH");
+            bool hasL = w.Members.Any(m => m.Code == "L" || m.Code == "RL");
+            bool isRangeExtreme = w.Count == 1 && (w.Members[0].Code == "RH" || w.Members[0].Code == "RL");
             string kind = hasH && hasL ? "S/R" : hasH ? "H" : "L";
 
             if (isWall)
@@ -410,9 +429,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 string side  = isResistance ? "R" : "S";
                 string stars = w.Count >= 4 ? " ****" : w.Count == 3 ? " ***" : w.Count == 2 ? " **" : "";
+                string loneTag = isRangeExtreme
+                    ? (w.Members[0].Code == "RH" ? "range hi" : "range lo")
+                    : "swing " + kind;
                 string text  = isWall
                     ? side + " " + FormatPrice(w.Center) + stars + "  " + w.Count + "x " + kind
-                    : side + " " + FormatPrice(w.Center) + "  swing " + kind;
+                    : side + " " + FormatPrice(w.Center) + "  " + loneTag;
                 Brush  txt   = isWall ? Brushes.White : WithOpacity(Brushes.White, 0.75);
                 int    fs    = isWall ? Math.Max(8, LabelFontSize) : Math.Max(7, LabelFontSize - 2);
                 try
@@ -458,7 +480,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             sb.AppendLine("  **  2x    ***  3x    ****  4+ touches");
             sb.AppendLine("R = resistance (above)   S = support (below)");
             sb.AppendLine("S/R = level flipped roles (strongest)");
-            sb.AppendLine("Dotted = most recent swing high / low");
+            sb.AppendLine("Dotted = recent swing + range hi/lo (boundaries)");
 
             TextPosition tp;
             switch (LegendPosition)
@@ -480,6 +502,63 @@ namespace NinjaTrader.NinjaScript.Indicators
         #endregion
     }
 }
+
+#region NinjaScript generated code. Neither change nor remove.
+
+namespace NinjaTrader.NinjaScript.Indicators
+{
+	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
+	{
+		private ThreePillarsMapHTF[] cacheThreePillarsMapHTF;
+		public ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return ThreePillarsMapHTF(Input);
+		}
+
+		public ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input)
+		{
+			if (cacheThreePillarsMapHTF != null)
+				for (int idx = 0; idx < cacheThreePillarsMapHTF.Length; idx++)
+					if (cacheThreePillarsMapHTF[idx] != null &&  cacheThreePillarsMapHTF[idx].EqualsInput(input))
+						return cacheThreePillarsMapHTF[idx];
+			return CacheIndicator<ThreePillarsMapHTF>(new ThreePillarsMapHTF(), input, ref cacheThreePillarsMapHTF);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
+{
+	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
+	{
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return indicator.ThreePillarsMapHTF(Input);
+		}
+
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMapHTF(input);
+		}
+	}
+}
+
+namespace NinjaTrader.NinjaScript.Strategies
+{
+	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
+	{
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF()
+		{
+			return indicator.ThreePillarsMapHTF(Input);
+		}
+
+		public Indicators.ThreePillarsMapHTF ThreePillarsMapHTF(ISeries<double> input )
+		{
+			return indicator.ThreePillarsMapHTF(input);
+		}
+	}
+}
+
+#endregion
 
 #region NinjaScript generated code. Neither change nor remove.
 
