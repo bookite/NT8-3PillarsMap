@@ -1,5 +1,5 @@
 ﻿// ============================================================
-// ThreePillarsMap.cs  â€"  v2.0
+// ThreePillarsMap.cs  â€”  v2.0
 // NinjaTrader 8  |  Multi-Timeframe Structural Wall Map
 // ============================================================
 //
@@ -7,7 +7,7 @@
 //   1. Copy this file to:
 //      Documents\NinjaTrader 8\bin\Custom\Indicators\
 //   2. In NinjaTrader: Tools > NinjaScript Editor > Compile
-//      â€" or â€" Tools > Compile NinjaScript
+//      â€” or â€” Tools > Compile NinjaScript
 //   3. Apply to any chart via Indicators > ThreePillarsMap
 //
 // SUPPORTED INSTRUMENTS:
@@ -19,11 +19,11 @@
 //   ZC        (Corn Futures)
 //
 // THREE-TIER SYSTEM:
-//   Tier 1  â€"  Thick solid/dashed lines, 100% opacity, always visible.
+//   Tier 1  â€”  Thick solid/dashed lines, 100% opacity, always visible.
 //              The most important structural walls for the selected timeframe.
-//   Tier 2  â€"  Thinner lines, 70% opacity, always visible.
+//   Tier 2  â€”  Thinner lines, 70% opacity, always visible.
 //              Context walls that give price the next reference.
-//   Tier 3  â€"  1px dotted lines, 50% opacity.
+//   Tier 3  â€”  1px dotted lines, 50% opacity.
 //              Hidden until price comes within ProximityTicks. Once
 //              activated they stay visible for the rest of the session.
 //
@@ -34,40 +34,40 @@
 // PARAMETERS (grouped by category in the indicator dialog):
 //
 //   Chart Configuration
-//     ChartRole                â€" Daily / FourHour / OneHour / FifteenMinute /
+//     ChartRole                â€” Daily / FourHour / OneHour / FifteenMinute /
 //                                ThreeMinute / OneMinute
-//     ProximityTicks           â€" Distance (ticks) to trigger Tier 3 levels
-//     ConfluenceProximityTicks â€" Distance (ticks) to cluster into confluence zone
+//     ProximityTicks           â€” Distance (ticks) to trigger Tier 3 levels
+//     ConfluenceProximityTicks â€” Distance (ticks) to cluster into confluence zone
 //
 //   Display
-//     ShowLabels               â€" Toggle level name + price labels
-//     ShowLegend               â€" Toggle the legend key panel
-//     LegendPosition           â€" TopLeft / TopRight / BottomLeft / BottomRight
-//     LabelFontSize            â€" 6â€"16, default 9
-//     LineThicknessPrimary     â€" Tier 1 line weight (1â€"5, default 2)
-//     LineThicknessSecondary   â€" Tier 2 line weight (1â€"5, default 1)
-//     ShowConfluenceZones      â€" Draw semi-transparent confluence rectangles
-//     ShowVerificationOutput   â€" Print detailed calculations to Output window
+//     ShowLabels               â€” Toggle level name + price labels
+//     ShowLegend               â€” Toggle the legend key panel
+//     LegendPosition           â€” TopLeft / TopRight / BottomLeft / BottomRight
+//     LabelFontSize            â€” 6â€“16, default 9
+//     LineThicknessPrimary     â€” Tier 1 line weight (1â€“5, default 2)
+//     LineThicknessSecondary   â€” Tier 2 line weight (1â€“5, default 1)
+//     ShowConfluenceZones      â€” Draw semi-transparent confluence rectangles
+//     ShowVerificationOutput   â€” Print detailed calculations to Output window
 //
 //   Visibility Toggles
-//     ShowYH / ShowYL          â€" Yesterday High / Low
-//     ShowONH / ShowONL        â€" Overnight High / Low
-//     ShowPOC / ShowVAH / ShowVAL â€" Daily volume profile levels
-//     ShowPivots               â€" PP, R1, S1
-//     ShowR2S2                 â€" R2, S2 (default false)
-//     ShowR3S3                 â€" R3, S3 (default false)
-//     ShowOR                   â€" Opening Range (equity index only)
-//     ShowWeeklyLevels         â€" Prior week + current week levels
-//     ShowMonthlyLevels        â€" Prior month levels (default false)
-//     ShowSwingLevels          â€" 4H swing high/low levels
+//     ShowYH / ShowYL          â€” Yesterday High / Low
+//     ShowONH / ShowONL        â€” Overnight High / Low
+//     ShowPOC / ShowVAH / ShowVAL â€” Daily volume profile levels
+//     ShowPivots               â€” PP, R1, S1
+//     ShowR2S2                 â€” R2, S2 (default false)
+//     ShowR3S3                 â€” R3, S3 (default false)
+//     ShowOR                   â€” Opening Range (equity index only)
+//     ShowWeeklyLevels         â€” Prior week + current week levels
+//     ShowMonthlyLevels        â€” Prior month levels (default false)
+//     ShowSwingLevels          â€” 4H swing high/low levels
 //
 //   Volume Profile
-//     ValueAreaPercent         â€" Target % of volume in value area (50â€"90, default 70)
+//     ValueAreaPercent         â€” Target % of volume in value area (50â€“90, default 70)
 //
 //   Swing Detection
-//     SwingStrength            â€" Bars each side a pivot must dominate (1â€"10, default 3)
+//     SwingStrength            â€” Bars each side a pivot must dominate (1â€“10, default 3)
 //
-//   Manual 4H Swing Levels    â€" Enter manually from your 4H chart if desired.
+//   Manual 4H Swing Levels    â€” Enter manually from your 4H chart if desired.
 //                                Value 0 = not drawn.
 //
 // CHANGELOG:
@@ -119,19 +119,19 @@ namespace NinjaTrader.NinjaScript.Indicators
     [CategoryOrder("Swing Detection",           3)]
     [CategoryOrder("Visibility Toggles",        4)]
     [CategoryOrder("Volume Profile",            5)]
-    [CategoryOrder("Colors â€" Daily Levels",     6)]
-    [CategoryOrder("Colors â€" Overnight",        7)]
-    [CategoryOrder("Colors â€" Volume Profile",   8)]
-    [CategoryOrder("Colors â€" Pivots",           9)]
-    [CategoryOrder("Colors â€" Opening Range",   10)]
-    [CategoryOrder("Colors â€" Weekly Levels",   11)]
-    [CategoryOrder("Colors â€" Monthly Levels",  12)]
-    [CategoryOrder("Colors â€" Swing Levels",    13)]
-    [CategoryOrder("Colors â€" Confluence",      14)]
+    [CategoryOrder("Colors â€” Daily Levels",     6)]
+    [CategoryOrder("Colors â€” Overnight",        7)]
+    [CategoryOrder("Colors â€” Volume Profile",   8)]
+    [CategoryOrder("Colors â€” Pivots",           9)]
+    [CategoryOrder("Colors â€” Opening Range",   10)]
+    [CategoryOrder("Colors â€” Weekly Levels",   11)]
+    [CategoryOrder("Colors â€” Monthly Levels",  12)]
+    [CategoryOrder("Colors â€” Swing Levels",    13)]
+    [CategoryOrder("Colors â€” Confluence",      14)]
     [CategoryOrder("Manual 4H Swing Levels",   15)]
     public class ThreePillarsMap : Indicator
     {
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region Constants
         private const int    MAX_LOOKBACK_DAILY   = 500;
         private const int    MAX_LOOKBACK_WEEKLY  = 2000;
@@ -142,7 +142,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private const double VALUE_AREA_TOLERANCE = 0.10; // 10% band for VA% warning
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region Instrument Config Fields
         private TimeSpan rthOpen;
         private TimeSpan rthClose;
@@ -153,7 +153,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private double   defaultConfluenceTicks = 8;
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region Level Price Variables
         private double lvlYH,  lvlYL,  lvlYC;
         private double lvlONH, lvlONL;
@@ -168,7 +168,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private double[] lvlSwingL = new double[3];
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region State / Session Fields
         private DateTime                   lastDrawnDate   = DateTime.MinValue;
         private string                     dateTag         = "";
@@ -184,7 +184,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private double                     dayProfileAvg   = 0;  // avg vol/level for confluence grading
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region Wall Engine State
         private readonly List<string> wallTags           = new List<string>();
         private double                lastWallBuildPrice = 0;
@@ -207,7 +207,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         #endregion
 
         // =================================================================
-        #region Parameters â€" Chart Configuration
+        #region Parameters â€” Chart Configuration
 
         [Display(Name = "Chart Role", GroupName = "Chart Configuration", Order = 1,
             Description = "Select the timeframe role for this chart. Controls which levels are drawn and at which tier.")]
@@ -224,8 +224,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         public int ConfluenceProximityTicks { get; set; }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Display
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Display
 
         [Display(Name = "Show Labels", GroupName = "Display", Order = 1)]
         public bool ShowLabels { get; set; }
@@ -256,8 +256,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         public bool ShowVerificationOutput { get; set; }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Structural Walls
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Structural Walls
 
         [Range(1, 15)]
         [Display(Name = "Max Walls Per Side", GroupName = "Structural Walls", Order = 1,
@@ -305,8 +305,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         { get { return Serialize.BrushToString(AnchorColor); } set { AnchorColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Swing Detection
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Swing Detection
 
         [Range(1, 10)]
         [Display(Name = "Swing Strength", GroupName = "Swing Detection", Order = 1,
@@ -314,8 +314,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         public int SwingStrength { get; set; }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Visibility Toggles
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Visibility Toggles
 
         [Display(Name = "Show Yesterday High",      GroupName = "Visibility Toggles", Order = 1)]
         public bool ShowYH { get; set; }
@@ -360,8 +360,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         public bool ShowSwingLevels { get; set; }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Volume Profile
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Volume Profile
 
         [Range(50, 90)]
         [Display(Name = "Value Area %", GroupName = "Volume Profile", Order = 1,
@@ -369,247 +369,247 @@ namespace NinjaTrader.NinjaScript.Indicators
         public double ValueAreaPercent { get; set; }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Daily Levels
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Daily Levels
 
         [XmlIgnore]
-        [Display(Name = "Yesterday High Color", GroupName = "Colors â€" Daily Levels", Order = 1)]
+        [Display(Name = "Yesterday High Color", GroupName = "Colors â€” Daily Levels", Order = 1)]
         public Brush YHColor { get; set; }
         [Browsable(false)]
         public string YHColorSerializable
         { get { return Serialize.BrushToString(YHColor); } set { YHColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Yesterday Low Color", GroupName = "Colors â€" Daily Levels", Order = 2)]
+        [Display(Name = "Yesterday Low Color", GroupName = "Colors â€” Daily Levels", Order = 2)]
         public Brush YLColor { get; set; }
         [Browsable(false)]
         public string YLColorSerializable
         { get { return Serialize.BrushToString(YLColor); } set { YLColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Yesterday Close Color", GroupName = "Colors â€" Daily Levels", Order = 3)]
+        [Display(Name = "Yesterday Close Color", GroupName = "Colors â€” Daily Levels", Order = 3)]
         public Brush YCColor { get; set; }
         [Browsable(false)]
         public string YCColorSerializable
         { get { return Serialize.BrushToString(YCColor); } set { YCColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Current Week High Color", GroupName = "Colors â€" Daily Levels", Order = 4)]
+        [Display(Name = "Current Week High Color", GroupName = "Colors â€” Daily Levels", Order = 4)]
         public Brush CWHColor { get; set; }
         [Browsable(false)]
         public string CWHColorSerializable
         { get { return Serialize.BrushToString(CWHColor); } set { CWHColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Current Week Low Color", GroupName = "Colors â€" Daily Levels", Order = 5)]
+        [Display(Name = "Current Week Low Color", GroupName = "Colors â€” Daily Levels", Order = 5)]
         public Brush CWLColor { get; set; }
         [Browsable(false)]
         public string CWLColorSerializable
         { get { return Serialize.BrushToString(CWLColor); } set { CWLColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Overnight
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Overnight
 
         [XmlIgnore]
-        [Display(Name = "Overnight High Color", GroupName = "Colors â€" Overnight", Order = 1)]
+        [Display(Name = "Overnight High Color", GroupName = "Colors â€” Overnight", Order = 1)]
         public Brush ONHColor { get; set; }
         [Browsable(false)]
         public string ONHColorSerializable
         { get { return Serialize.BrushToString(ONHColor); } set { ONHColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Overnight Low Color", GroupName = "Colors â€" Overnight", Order = 2)]
+        [Display(Name = "Overnight Low Color", GroupName = "Colors â€” Overnight", Order = 2)]
         public Brush ONLColor { get; set; }
         [Browsable(false)]
         public string ONLColorSerializable
         { get { return Serialize.BrushToString(ONLColor); } set { ONLColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Volume Profile
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Volume Profile
 
         [XmlIgnore]
-        [Display(Name = "Prior Day POC Color", GroupName = "Colors â€" Volume Profile", Order = 1)]
+        [Display(Name = "Prior Day POC Color", GroupName = "Colors â€” Volume Profile", Order = 1)]
         public Brush POCColor { get; set; }
         [Browsable(false)]
         public string POCColorSerializable
         { get { return Serialize.BrushToString(POCColor); } set { POCColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Prior Day VAH Color", GroupName = "Colors â€" Volume Profile", Order = 2)]
+        [Display(Name = "Prior Day VAH Color", GroupName = "Colors â€” Volume Profile", Order = 2)]
         public Brush VAHColor { get; set; }
         [Browsable(false)]
         public string VAHColorSerializable
         { get { return Serialize.BrushToString(VAHColor); } set { VAHColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Prior Day VAL Color", GroupName = "Colors â€" Volume Profile", Order = 3)]
+        [Display(Name = "Prior Day VAL Color", GroupName = "Colors â€” Volume Profile", Order = 3)]
         public Brush VALColor { get; set; }
         [Browsable(false)]
         public string VALColorSerializable
         { get { return Serialize.BrushToString(VALColor); } set { VALColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Weekly POC Color", GroupName = "Colors â€" Volume Profile", Order = 4)]
+        [Display(Name = "Weekly POC Color", GroupName = "Colors â€” Volume Profile", Order = 4)]
         public Brush WeeklyPOCColor { get; set; }
         [Browsable(false)]
         public string WeeklyPOCColorSerializable
         { get { return Serialize.BrushToString(WeeklyPOCColor); } set { WeeklyPOCColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Weekly VAH Color", GroupName = "Colors â€" Volume Profile", Order = 5)]
+        [Display(Name = "Weekly VAH Color", GroupName = "Colors â€” Volume Profile", Order = 5)]
         public Brush WeeklyVAHColor { get; set; }
         [Browsable(false)]
         public string WeeklyVAHColorSerializable
         { get { return Serialize.BrushToString(WeeklyVAHColor); } set { WeeklyVAHColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Weekly VAL Color", GroupName = "Colors â€" Volume Profile", Order = 6)]
+        [Display(Name = "Weekly VAL Color", GroupName = "Colors â€” Volume Profile", Order = 6)]
         public Brush WeeklyVALColor { get; set; }
         [Browsable(false)]
         public string WeeklyVALColorSerializable
         { get { return Serialize.BrushToString(WeeklyVALColor); } set { WeeklyVALColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Pivots
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Pivots
 
         [XmlIgnore]
-        [Display(Name = "Pivot Point (PP) Color", GroupName = "Colors â€" Pivots", Order = 1)]
+        [Display(Name = "Pivot Point (PP) Color", GroupName = "Colors â€” Pivots", Order = 1)]
         public Brush PPColor { get; set; }
         [Browsable(false)]
         public string PPColorSerializable
         { get { return Serialize.BrushToString(PPColor); } set { PPColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "R1 Color", GroupName = "Colors â€" Pivots", Order = 2)]
+        [Display(Name = "R1 Color", GroupName = "Colors â€” Pivots", Order = 2)]
         public Brush R1Color { get; set; }
         [Browsable(false)]
         public string R1ColorSerializable
         { get { return Serialize.BrushToString(R1Color); } set { R1Color = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "R2 Color", GroupName = "Colors â€" Pivots", Order = 3)]
+        [Display(Name = "R2 Color", GroupName = "Colors â€” Pivots", Order = 3)]
         public Brush R2Color { get; set; }
         [Browsable(false)]
         public string R2ColorSerializable
         { get { return Serialize.BrushToString(R2Color); } set { R2Color = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "R3 Color", GroupName = "Colors â€" Pivots", Order = 4)]
+        [Display(Name = "R3 Color", GroupName = "Colors â€” Pivots", Order = 4)]
         public Brush R3Color { get; set; }
         [Browsable(false)]
         public string R3ColorSerializable
         { get { return Serialize.BrushToString(R3Color); } set { R3Color = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "S1 Color", GroupName = "Colors â€" Pivots", Order = 5)]
+        [Display(Name = "S1 Color", GroupName = "Colors â€” Pivots", Order = 5)]
         public Brush S1Color { get; set; }
         [Browsable(false)]
         public string S1ColorSerializable
         { get { return Serialize.BrushToString(S1Color); } set { S1Color = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "S2 Color", GroupName = "Colors â€" Pivots", Order = 6)]
+        [Display(Name = "S2 Color", GroupName = "Colors â€” Pivots", Order = 6)]
         public Brush S2Color { get; set; }
         [Browsable(false)]
         public string S2ColorSerializable
         { get { return Serialize.BrushToString(S2Color); } set { S2Color = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "S3 Color", GroupName = "Colors â€" Pivots", Order = 7)]
+        [Display(Name = "S3 Color", GroupName = "Colors â€” Pivots", Order = 7)]
         public Brush S3Color { get; set; }
         [Browsable(false)]
         public string S3ColorSerializable
         { get { return Serialize.BrushToString(S3Color); } set { S3Color = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Opening Range
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Opening Range
 
         [XmlIgnore]
-        [Display(Name = "Opening Range High Color", GroupName = "Colors â€" Opening Range", Order = 1)]
+        [Display(Name = "Opening Range High Color", GroupName = "Colors â€” Opening Range", Order = 1)]
         public Brush ORHighColor { get; set; }
         [Browsable(false)]
         public string ORHighColorSerializable
         { get { return Serialize.BrushToString(ORHighColor); } set { ORHighColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Opening Range Low Color", GroupName = "Colors â€" Opening Range", Order = 2)]
+        [Display(Name = "Opening Range Low Color", GroupName = "Colors â€” Opening Range", Order = 2)]
         public Brush ORLowColor { get; set; }
         [Browsable(false)]
         public string ORLowColorSerializable
         { get { return Serialize.BrushToString(ORLowColor); } set { ORLowColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Weekly Levels
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Weekly Levels
 
         [XmlIgnore]
-        [Display(Name = "Prior Week High Color", GroupName = "Colors â€" Weekly Levels", Order = 1)]
+        [Display(Name = "Prior Week High Color", GroupName = "Colors â€” Weekly Levels", Order = 1)]
         public Brush PWHColor { get; set; }
         [Browsable(false)]
         public string PWHColorSerializable
         { get { return Serialize.BrushToString(PWHColor); } set { PWHColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Prior Week Low Color", GroupName = "Colors â€" Weekly Levels", Order = 2)]
+        [Display(Name = "Prior Week Low Color", GroupName = "Colors â€” Weekly Levels", Order = 2)]
         public Brush PWLColor { get; set; }
         [Browsable(false)]
         public string PWLColorSerializable
         { get { return Serialize.BrushToString(PWLColor); } set { PWLColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Monthly Levels
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Monthly Levels
 
         [XmlIgnore]
-        [Display(Name = "Prior Month High Color", GroupName = "Colors â€" Monthly Levels", Order = 1)]
+        [Display(Name = "Prior Month High Color", GroupName = "Colors â€” Monthly Levels", Order = 1)]
         public Brush PMHColor { get; set; }
         [Browsable(false)]
         public string PMHColorSerializable
         { get { return Serialize.BrushToString(PMHColor); } set { PMHColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Prior Month Low Color", GroupName = "Colors â€" Monthly Levels", Order = 2)]
+        [Display(Name = "Prior Month Low Color", GroupName = "Colors â€” Monthly Levels", Order = 2)]
         public Brush PMLColor { get; set; }
         [Browsable(false)]
         public string PMLColorSerializable
         { get { return Serialize.BrushToString(PMLColor); } set { PMLColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Swing Levels
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Swing Levels
 
         [XmlIgnore]
-        [Display(Name = "Swing High Color", GroupName = "Colors â€" Swing Levels", Order = 1)]
+        [Display(Name = "Swing High Color", GroupName = "Colors â€” Swing Levels", Order = 1)]
         public Brush SwingHighColor { get; set; }
         [Browsable(false)]
         public string SwingHighColorSerializable
         { get { return Serialize.BrushToString(SwingHighColor); } set { SwingHighColor = Serialize.StringToBrush(value); } }
 
         [XmlIgnore]
-        [Display(Name = "Swing Low Color", GroupName = "Colors â€" Swing Levels", Order = 2)]
+        [Display(Name = "Swing Low Color", GroupName = "Colors â€” Swing Levels", Order = 2)]
         public Brush SwingLowColor { get; set; }
         [Browsable(false)]
         public string SwingLowColorSerializable
         { get { return Serialize.BrushToString(SwingLowColor); } set { SwingLowColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Colors: Confluence
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Colors: Confluence
 
         [XmlIgnore]
-        [Display(Name = "Confluence Zone Color", GroupName = "Colors â€" Confluence", Order = 1)]
+        [Display(Name = "Confluence Zone Color", GroupName = "Colors â€” Confluence", Order = 1)]
         public Brush ConfluenceZoneColor { get; set; }
         [Browsable(false)]
         public string ConfluenceZoneColorSerializable
         { get { return Serialize.BrushToString(ConfluenceZoneColor); } set { ConfluenceZoneColor = Serialize.StringToBrush(value); } }
         #endregion
 
-        // â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        #region Parameters â€" Manual 4H Swing Levels
+        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        #region Parameters â€” Manual 4H Swing Levels
 
         [Display(Name = "4H Swing High 1", GroupName = "Manual 4H Swing Levels", Order = 1,
             Description = "Enter from your 4H chart. Leave 0 to skip.")]
@@ -693,7 +693,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 SwingHigh4H_1 = SwingHigh4H_2 = SwingHigh4H_3 = 0;
                 SwingLow4H_1  = SwingLow4H_2  = SwingLow4H_3  = 0;
 
-                // Default colors â€" Daily
+                // Default colors â€” Daily
                 YHColor                     = Brushes.Crimson;
                 YLColor                     = Brushes.LimeGreen;
                 YCColor                     = Brushes.Gray;
@@ -843,7 +843,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool isRTH = IsRTHBar(barTime);
             if (!isRTH) return;
 
-            // â"€â"€ SESSION START: draw all levels once per calendar date â"€â"€
+            // â”€â”€ SESSION START: draw all levels once per calendar date â”€â”€
             if (barDate != lastDrawnDate)
             {
                 lastDrawnDate = barDate;
@@ -872,12 +872,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 DrawLegend();
             }
 
-            // â"€â"€ Rebuild walls when price drifts, so R/S sides stay correct as price moves â"€â"€
+            // â”€â”€ Rebuild walls when price drifts, so R/S sides stay correct as price moves â”€â”€
             if (lastWallBuildPrice > 0
                 && Math.Abs(Close[0] - lastWallBuildPrice) > GetClusterTolerance() * 0.5)
                 BuildAndDrawWalls();
 
-            // â"€â"€ OPENING RANGE TRACKING â"€â"€
+            // â”€â”€ OPENING RANGE TRACKING â”€â”€
             if (instrumentHasOR && !orComplete)
             {
                 if (barTime >= orStart && barTime < orEnd)
@@ -911,7 +911,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             CalcSwingLevels();
         }
 
-        // â"€â"€ Prior Day RTH Levels + Volume Profile â"€â"€
+        // â”€â”€ Prior Day RTH Levels + Volume Profile â”€â”€
         private void CalcPriorDayLevels(DateTime today)
         {
             dayProfile.Clear();
@@ -953,7 +953,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // â"€â"€ Pivot Points (standard floor formula) â"€â"€
+        // â”€â”€ Pivot Points (standard floor formula) â”€â”€
         private void CalcPivots()
         {
             if (lvlYH == 0 || lvlYL == 0) return;
@@ -966,7 +966,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             lvlS3 = lvlYL - 2.0 * (lvlYH - lvlPP);
         }
 
-        // â"€â"€ Overnight High / Low â"€â"€
+        // â”€â”€ Overnight High / Low â”€â”€
         private void CalcOvernightLevels(DateTime today)
         {
             if (priorRTHDate == DateTime.MinValue) return;
@@ -987,13 +987,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (lvlONL == 0 || Low[i]  < lvlONL) lvlONL = Low[i];
                 }
                 else if (bd == priorRTHDate && IsRTHBar(bt))
-                    break; // reached yesterday's RTH â€" stop
+                    break; // reached yesterday's RTH â€” stop
                 else if (bd < priorRTHDate)
                     break;
             }
         }
 
-        // â"€â"€ Weekly Levels (prior complete week + current week) â"€â"€
+        // â”€â”€ Weekly Levels (prior complete week + current week) â”€â”€
         private void CalcWeeklyLevels(DateTime today)
         {
             weekProfile.Clear();
@@ -1036,7 +1036,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // â"€â"€ Monthly Levels (prior complete calendar month) â"€â"€
+        // â”€â”€ Monthly Levels (prior complete calendar month) â”€â”€
         private void CalcMonthlyLevels(DateTime today)
         {
             lvlPMH = lvlPML = 0;
@@ -1057,7 +1057,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // â"€â"€ Auto-detect 4H Swing Highs/Lows using SwingStrength â"€â"€
+        // â”€â”€ Auto-detect 4H Swing Highs/Lows using SwingStrength â”€â”€
         private void CalcSwingLevels()
         {
             // Use manual inputs if provided; else auto-detect on current chart bars
@@ -1090,7 +1090,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // â"€â"€ Update CWH / CWL dynamically each bar â"€â"€
+        // â”€â”€ Update CWH / CWL dynamically each bar â”€â”€
         private void UpdateCurrentWeekExtremes()
         {
             if (!ShowWeeklyLevels) return;
@@ -1180,7 +1180,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // â"€â"€ Daily Chart â"€â"€
+        // â”€â”€ Daily Chart â”€â”€
         private void DrawDaily()
         {
             // Tier 1: PMH, PML, PWH, PWL
@@ -1202,7 +1202,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // â"€â"€ 4H Chart â"€â"€
+        // â”€â”€ 4H Chart â”€â”€
         private void DrawFourHour()
         {
             if (ShowWeeklyLevels)
@@ -1232,7 +1232,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // â"€â"€ 1H Chart â"€â"€
+        // â”€â”€ 1H Chart â”€â”€
         private void DrawOneHour()
         {
             if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
@@ -1281,7 +1281,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
         }
 
-        // â"€â"€ 15M Chart â"€â"€
+        // â”€â”€ 15M Chart â”€â”€
         private void DrawFifteenMinute()
         {
             if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
@@ -1331,7 +1331,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
         }
 
-        // â"€â"€ 3M Chart â"€â"€
+        // â”€â”€ 3M Chart â”€â”€
         private void DrawThreeMinute()
         {
             if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
@@ -1381,7 +1381,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
         }
 
-        // â"€â"€ 1M Chart â"€â"€
+        // â”€â”€ 1M Chart â”€â”€
         private void DrawOneMinute()
         {
             // Tier 1: PP only
@@ -1400,7 +1400,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // â"€â"€ Opening Range (called after 9:45 AM) â"€â"€
+        // â”€â”€ Opening Range (called after 9:45 AM) â”€â”€
         private void DrawOpeningRangeLevels()
         {
             if (!instrumentHasOR || !ShowOR) return;
@@ -1442,7 +1442,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             Brush lineColor  = tier == 1 ? color : WithOpacity(color, tier == 2 ? 0.70 : 0.50);
             Brush labelColor = lineColor;
 
-            // For Tier 3 â€" initially hidden; drawn only when proximity-activated
+            // For Tier 3 â€” initially hidden; drawn only when proximity-activated
             if (tier == 3)
             {
                 if (!tier3Activated.Contains(tag))
@@ -1486,7 +1486,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
-        // Opacity helper â€" clones a SolidColorBrush at given alpha
+        // Opacity helper â€” clones a SolidColorBrush at given alpha
         private Brush WithOpacity(Brush brush, double opacity)
         {
             try
@@ -1529,7 +1529,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             void Add(double p, string code, double w, bool anchor, bool key)
             { if (p > 0) c.Add(new LevelCandidate { Price = p, Code = code, Weight = w, IsAnchor = anchor, IsKey = key }); }
 
-            // Anchors â€" prior-day refs, always shown
+            // Anchors â€” prior-day refs, always shown
             Add(lvlYH,  "YH",  2.5, true,  false);
             Add(lvlYL,  "YL",  2.5, true,  false);
             Add(lvlYC,  "YC",  1.5, true,  false);
@@ -1540,8 +1540,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Overnight
             Add(lvlONH, "ONH", 1.5, false, false);
             Add(lvlONL, "ONL", 1.5, false, false);
-            // Pivots — R1/S1 standard; R2/S2/R3/S3 marked IsKey so they appear
-            // alone on big trending days when price blows through R1/S1
+            // Pivots
             Add(lvlPP, "PP", 1.5, false, false);
             Add(lvlR1, "R1", 1.2, false, false);
             Add(lvlS1, "S1", 1.2, false, false);
@@ -1549,13 +1548,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             Add(lvlS2, "S2", 1.0, false, true);
             Add(lvlR3, "R3", 0.8, false, true);
             Add(lvlS3, "S3", 0.8, false, true);
-            // Weekly â€" PWH/PWL/WPOC are key (show lone when near price)
+            // Weekly â€” PWH/PWL/WPOC are key (show lone when near price)
             Add(lvlPWH,     "PWH",  2.5, false, true);
             Add(lvlPWL,     "PWL",  2.5, false, true);
             Add(lvlWeekPOC, "WPOC", 2.5, false, true);
             Add(lvlWeekVAH, "WVAH", 2.0, false, false);
             Add(lvlWeekVAL, "WVAL", 2.0, false, false);
-            // Monthly â€" key
+            // Monthly â€” key
             Add(lvlPMH, "PMH", 2.0, false, true);
             Add(lvlPML, "PML", 2.0, false, true);
             // Opening range (once complete)
@@ -1566,11 +1565,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Add(lvlSwingH[k], "SH", 1.5, false, false);
                 Add(lvlSwingL[k], "SL", 1.5, false, false);
             }
-            // Range extremes — the overall RTH high/low across the lookback window.
-            // These anchor the wall map to where price has actually traded, ensuring
-            // there is always at least one wall reference above AND below on breakout
-            // days when price has moved beyond all session structure (e.g. a day that
-            // breaks below YL + S1 + S2 simultaneously, leaving the chart blank below).
+            // Range extremes: overall RTH high/low across the lookback window.
+            // Ensures a reference wall exists below AND above price on big breakout days
+            // when all session structure has been breached (e.g. flash crash below S3/YL).
             {
                 int    span = Math.Min(CurrentBar, MAX_LOOKBACK_DAILY);
                 double rHi  = double.MinValue;
@@ -1710,7 +1707,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
             else
             {
-                // Lone anchor â€" quiet dotted reference line
+                // Lone anchor â€” quiet dotted reference line
                 try
                 {
                     Draw.HorizontalLine(this, tagLine, false, w.Center,
@@ -1786,7 +1783,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                                        string lbl, double cur, double thresh, int tier)
         {
             if (price == 0) return;
-            if (tier3Activated.Contains(tag)) return; // already visible â€" stays visible
+            if (tier3Activated.Contains(tag)) return; // already visible â€” stays visible
             if (Math.Abs(cur - price) <= thresh)
             {
                 tier3Activated.Add(tag);
@@ -1858,7 +1855,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
                 catch (Exception ex) { Print(LOG_PREFIX + " DrawRect error: " + ex.Message); }
 
-                string lbl     = "CONFLUENCE â€" " + grade;
+                string lbl     = "CONFLUENCE â€” " + grade;
                 string lblTag  = czTag + "_L";
                 double midPrice = (zone.low + zone.high) / 2.0;
                 Brush  lblColor = WithOpacity(ConfluenceZoneColor, 0.80);
@@ -1874,7 +1871,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     double zoneVol = GetZoneVolume(zone.low, zone.high);
                     int    nLevels = (int)Math.Round(Math.Abs(zone.high - zone.low) / TickSize) + 1;
                     double zoneAvg = nLevels > 0 ? zoneVol / nLevels : 0;
-                    Print(string.Format("{0} â"€â"€ CONFLUENCE ZONE {1} â"€â"€", LOG_PREFIX, z + 1));
+                    Print(string.Format("{0} â”€â”€ CONFLUENCE ZONE {1} â”€â”€", LOG_PREFIX, z + 1));
                     Print(string.Format("{0}   Levels: {1}", LOG_PREFIX, string.Join(" + ", zone.names)));
                     Print(string.Format("{0}   Zone range: {1} to {2}", LOG_PREFIX, zone.low, zone.high));
                     Print(string.Format("{0}   Profile volume in zone: {1:N0}", LOG_PREFIX, zoneVol));
@@ -2025,7 +2022,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             // 1. PP between YH and YL
             if (lvlPP > 0 && (lvlPP > lvlYH || lvlPP < lvlYL))
-                Print(LOG_PREFIX + " WARNING: PP=" + lvlPP + " is outside YH-YL range â€" calculation error");
+                Print(LOG_PREFIX + " WARNING: PP=" + lvlPP + " is outside YH-YL range â€” calculation error");
 
             // 2. R1 between PP and R2
             if (lvlR1 > 0 && lvlR2 > 0 && !(lvlR1 > lvlPP && lvlR1 < lvlR2))
@@ -2045,7 +2042,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 double vaVol = GetZoneVolume(lvlVAL, lvlVAH);
                 double pct   = vaVol / dayTotalVol * 100.0;
                 if (pct < (ValueAreaPercent - 5) || pct > (ValueAreaPercent + 5))
-                    Print(string.Format("{0} WARNING: Value area is {1:F1}% of total â€" target was {2}%",
+                    Print(string.Format("{0} WARNING: Value area is {1:F1}% of total â€” target was {2}%",
                         LOG_PREFIX, pct, ValueAreaPercent));
             }
 
@@ -2058,7 +2055,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             double[] values = { lvlYH,lvlYL,lvlYC,lvlPP,lvlR1,lvlS1,lvlPOC,lvlVAH,lvlVAL,lvlPWH,lvlPWL };
             for (int n = 0; n < names.Length; n++)
                 if (values[n] == 0)
-                    Print(LOG_PREFIX + " WARNING: " + names[n] + " is 0 â€" calculation may have failed");
+                    Print(LOG_PREFIX + " WARNING: " + names[n] + " is 0 â€” calculation may have failed");
         }
 
         private void PrintVerificationOutput(DateTime today)
@@ -2067,14 +2064,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             Print(string.Format("{0} Instrument: {1} | Chart Role: {2} | TickSize: {3}",
                 LOG_PREFIX, instrumentKey, ChartRole, TickSize));
             Print("");
-            Print(LOG_PREFIX + " â"€â"€ PRIOR DAY LEVELS â"€â"€");
+            Print(LOG_PREFIX + " â”€â”€ PRIOR DAY LEVELS â”€â”€");
             Print(string.Format("{0}   Prior Session Date: {1}", LOG_PREFIX, priorRTHDate.ToString("yyyy-MM-dd")));
             Print(string.Format("{0}   RTH Bars Found: {1}", LOG_PREFIX, priorDayBars));
             Print(string.Format("{0}   YH = {1}", LOG_PREFIX, lvlYH));
             Print(string.Format("{0}   YL = {1}", LOG_PREFIX, lvlYL));
             Print(string.Format("{0}   YC = {1} (close of last RTH bar)", LOG_PREFIX, lvlYC));
             Print("");
-            Print(LOG_PREFIX + " â"€â"€ PIVOT VERIFICATION â"€â"€");
+            Print(LOG_PREFIX + " â”€â”€ PIVOT VERIFICATION â”€â”€");
             Print(string.Format("{0}   PP = ({1} + {2} + {3}) / 3 = {4:F2}",
                 LOG_PREFIX, lvlYH, lvlYL, lvlYC, lvlPP));
             Print(string.Format("{0}   R1 = (2 Ã— {1:F2}) âˆ’ {2} = {3:F2}", LOG_PREFIX, lvlPP, lvlYL, lvlR1));
@@ -2082,14 +2079,14 @@ namespace NinjaTrader.NinjaScript.Indicators
             Print(string.Format("{0}   R2 = {1:F2} + ({2} âˆ’ {3}) = {4:F2}", LOG_PREFIX, lvlPP, lvlYH, lvlYL, lvlR2));
             Print(string.Format("{0}   S2 = {1:F2} âˆ’ ({2} âˆ’ {3}) = {4:F2}", LOG_PREFIX, lvlPP, lvlYH, lvlYL, lvlS2));
             Print("");
-            Print(LOG_PREFIX + " â"€â"€ OVERNIGHT LEVELS â"€â"€");
+            Print(LOG_PREFIX + " â”€â”€ OVERNIGHT LEVELS â”€â”€");
             Print(string.Format("{0}   Overnight bars scanned: {1}", LOG_PREFIX, overnightBars));
             Print(string.Format("{0}   ONH = {1} | vs YH: {2}", LOG_PREFIX, lvlONH,
                 lvlONH > lvlYH ? "ONH > YH â†’ PROMOTED to Tier 1" : "ONH <= YH â†’ standard Tier 2"));
             Print(string.Format("{0}   ONL = {1} | vs YL: {2}", LOG_PREFIX, lvlONL,
                 lvlONL < lvlYL ? "ONL < YL â†’ PROMOTED to Tier 1" : "ONL >= YL â†’ standard Tier 2"));
             Print("");
-            Print(LOG_PREFIX + " â"€â"€ VOLUME PROFILE (Prior Day) â"€â"€");
+            Print(LOG_PREFIX + " â”€â”€ VOLUME PROFILE (Prior Day) â”€â”€");
             Print(string.Format("{0}   Price levels in profile: {1}", LOG_PREFIX, dayProfile.Count));
             Print(string.Format("{0}   Total volume: {1:N0}", LOG_PREFIX, dayTotalVol));
             Print(string.Format("{0}   POC = {1}", LOG_PREFIX, lvlPOC));
@@ -2101,15 +2098,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Print(string.Format("{0}   Actual VA volume: {1:N0} ({2:F1}% of total)", LOG_PREFIX, vaVol, vaVol / dayTotalVol * 100.0));
             }
             Print("");
-            Print(LOG_PREFIX + " â"€â"€ WEEKLY LEVELS â"€â"€");
+            Print(LOG_PREFIX + " â”€â”€ WEEKLY LEVELS â”€â”€");
             Print(string.Format("{0}   PWH = {1} | PWL = {2}", LOG_PREFIX, lvlPWH, lvlPWL));
             Print(string.Format("{0}   Weekly POC = {1} | Weekly VAH = {2} | Weekly VAL = {3}",
                 LOG_PREFIX, lvlWeekPOC, lvlWeekVAH, lvlWeekVAL));
             Print("");
-            Print(LOG_PREFIX + " â"€â"€ MONTHLY LEVELS â"€â"€");
+            Print(LOG_PREFIX + " â”€â”€ MONTHLY LEVELS â”€â”€");
             Print(string.Format("{0}   PMH = {1} | PML = {2}", LOG_PREFIX, lvlPMH, lvlPML));
             Print("");
-            Print(LOG_PREFIX + " â"€â"€ TIER ASSIGNMENTS (ChartRole: " + ChartRole + ") â"€â"€");
+            Print(LOG_PREFIX + " â”€â”€ TIER ASSIGNMENTS (ChartRole: " + ChartRole + ") â”€â”€");
             PrintTierAssignments();
             Print("");
             Print(LOG_PREFIX + " â•â•â• VERIFICATION COMPLETE â•â•â•");
