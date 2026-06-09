@@ -1538,32 +1538,51 @@ namespace NinjaTrader.NinjaScript.Indicators
             Add(lvlVAL, "VAL", 2.0, true,  false);
 
             // Overnight
-            Add(lvlONH, "ONH", 1.5, false, false);
-            Add(lvlONL, "ONL", 1.5, false, false);
-            // Pivots
-            Add(lvlPP, "PP", 1.5, false, false);
-            Add(lvlR1, "R1", 1.2, false, false);
-            Add(lvlS1, "S1", 1.2, false, false);
-            Add(lvlR2, "R2", 1.0, false, false);
-            Add(lvlS2, "S2", 1.0, false, false);
-            Add(lvlR3, "R3", 0.8, false, false);
-            Add(lvlS3, "S3", 0.8, false, false);
+            Add(lvlONH, “ONH”, 1.5, false, false);
+            Add(lvlONL, “ONL”, 1.5, false, false);
+            // Pivots — R1/S1 standard; R2/S2/R3/S3 marked IsKey so they appear
+            // alone on big trending days when price blows through R1/S1
+            Add(lvlPP, “PP”, 1.5, false, false);
+            Add(lvlR1, “R1”, 1.2, false, false);
+            Add(lvlS1, “S1”, 1.2, false, false);
+            Add(lvlR2, “R2”, 1.0, false, true);
+            Add(lvlS2, “S2”, 1.0, false, true);
+            Add(lvlR3, “R3”, 0.8, false, true);
+            Add(lvlS3, “S3”, 0.8, false, true);
             // Weekly â€” PWH/PWL/WPOC are key (show lone when near price)
-            Add(lvlPWH,     "PWH",  2.5, false, true);
-            Add(lvlPWL,     "PWL",  2.5, false, true);
-            Add(lvlWeekPOC, "WPOC", 2.5, false, true);
-            Add(lvlWeekVAH, "WVAH", 2.0, false, false);
-            Add(lvlWeekVAL, "WVAL", 2.0, false, false);
+            Add(lvlPWH,     “PWH”,  2.5, false, true);
+            Add(lvlPWL,     “PWL”,  2.5, false, true);
+            Add(lvlWeekPOC, “WPOC”, 2.5, false, true);
+            Add(lvlWeekVAH, “WVAH”, 2.0, false, false);
+            Add(lvlWeekVAL, “WVAL”, 2.0, false, false);
             // Monthly â€” key
-            Add(lvlPMH, "PMH", 2.0, false, true);
-            Add(lvlPML, "PML", 2.0, false, true);
+            Add(lvlPMH, “PMH”, 2.0, false, true);
+            Add(lvlPML, “PML”, 2.0, false, true);
             // Opening range (once complete)
-            if (orComplete) { Add(lvlORH, "ORH", 1.2, false, false); Add(lvlORL, "ORL", 1.2, false, false); }
+            if (orComplete) { Add(lvlORH, “ORH”, 1.2, false, false); Add(lvlORL, “ORL”, 1.2, false, false); }
             // 4H swings
             for (int k = 0; k < 3; k++)
             {
-                Add(lvlSwingH[k], "SH", 1.5, false, false);
-                Add(lvlSwingL[k], "SL", 1.5, false, false);
+                Add(lvlSwingH[k], “SH”, 1.5, false, false);
+                Add(lvlSwingL[k], “SL”, 1.5, false, false);
+            }
+            // Range extremes — the overall RTH high/low across the lookback window.
+            // These anchor the wall map to where price has actually traded, ensuring
+            // there is always at least one wall reference above AND below on breakout
+            // days when price has moved beyond all session structure (e.g. a day that
+            // breaks below YL + S1 + S2 simultaneously, leaving the chart blank below).
+            {
+                int    span = Math.Min(CurrentBar, MAX_LOOKBACK_DAILY);
+                double rHi  = double.MinValue;
+                double rLo  = double.MaxValue;
+                for (int i = 0; i < span; i++)
+                {
+                    if (!IsRTHBar(Time[i].TimeOfDay)) continue;
+                    if (High[i] > rHi) rHi = High[i];
+                    if (Low[i]  < rLo) rLo = Low[i];
+                }
+                if (rHi > double.MinValue) Add(rHi, “RH”, 1.5, false, true);
+                if (rLo < double.MaxValue) Add(rLo, “RL”, 1.5, false, true);
             }
         }
 
