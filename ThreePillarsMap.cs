@@ -873,6 +873,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                     try { PrintVerificationOutput(barDate); }
                     catch (Exception ex) { Print(LOG_PREFIX + " ERROR in PrintVerificationOutput: " + ex.Message); }
 
+                // Seed session extremes before drawing so slow timeframes
+                // (4H OnBarClose) show correct values on the first draw
+                if (High[0] > sesHi) sesHi = High[0];
+                if (sesLo == 0 || Low[0] < sesLo) sesLo = Low[0];
                 BuildAndDrawWalls();
             }
 
