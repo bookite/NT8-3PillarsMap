@@ -188,6 +188,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         #region Wall Engine State
         private readonly List<string> wallTags           = new List<string>();
         private double                lastWallBuildPrice = 0;
+        private List<Wall>            lastKeptWalls      = new List<Wall>();
+        private double                sesHi              = 0;
+        private double                sesLo              = 0;
 
         private class LevelCandidate
         {
@@ -854,6 +857,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 tier3Activated.Clear();
 
                 // Reset dynamic OR state
+                sesHi      = 0;
+                sesLo      = 0;
                 orComplete = false;
                 lvlORH     = 0;
                 lvlORL     = 0;
@@ -869,8 +874,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                     catch (Exception ex) { Print(LOG_PREFIX + " ERROR in PrintVerificationOutput: " + ex.Message); }
 
                 BuildAndDrawWalls();
-                DrawLegend();
             }
+
+            // Track today's RTH session extremes for the context panel
+            if (High[0] > sesHi) sesHi = High[0];
+            if (sesLo == 0 || Low[0] < sesLo) sesLo = Low[0];
 
             // â”€â”€ Rebuild walls when price drifts, so R/S sides stay correct as price moves â”€â”€
             if (lastWallBuildPrice > 0
@@ -1578,8 +1586,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (High[i] > rHi) rHi = High[i];
                     if (Low[i]  < rLo) rLo = Low[i];
                 }
-                if (rHi > double.MinValue) Add(rHi, "RH", 1.5, false, true);
-                if (rLo < double.MaxValue) Add(rLo, "RL", 1.5, false, true);
+                if (rHi > double.MinValue) Add(rHi, "RH", 1.5, true,  false);
+                if (rLo < double.MaxValue) Add(rLo, "RL", 1.5, true,  false);
             }
         }
 
@@ -1647,11 +1655,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             var below = new List<Wall>();
             foreach (var w in walls)
             {
-                bool hasAnchor = WallHasAnchor(w);              // always shown
-                bool inRange   = Math.Abs(w.Center - price) <= rangeAbs;
-                bool keepLone  = hasAnchor || (WallHasKey(w) && inRange);
-                if (w.Count < MinConfluence && !keepLone) continue;   // lone non-key minor level
-                if (!inRange && !hasAnchor) continue;                 // out of range (key needs range too)
+                bool hasAnchor  = WallHasAnchor(w);
+                bool hasKey     = WallHasKey(w);
+                bool inRange    = Math.Abs(w.Center - price) <= rangeAbs;
+                // IsKey walls (S2/S3/R2/R3/PWH/PWL/etc.) get 3x range so they remain
+                // visible on volatile days where S2 can be 900+ pts from price.
+                bool keyInRange = hasKey && Math.Abs(w.Center - price) <= rangeAbs * 3.0;
+                bool keepLone   = hasAnchor || keyInRange;
+                if (w.Count < MinConfluence && !keepLone) continue;
+                if (!inRange && !hasAnchor && !keyInRange) continue;
                 if (w.Center >= price) above.Add(w); else below.Add(w);
             }
 
@@ -1662,6 +1674,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             int idx = 0;
             foreach (var w in keep)
                 DrawWall(w, price, idx++);
+            lastKeptWalls = keep;
+            DrawLegend();  // refresh context panel after each wall rebuild
         }
 
         private void DrawWall(Wall w, double price, int idx)
@@ -1979,30 +1993,69 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (!ShowLegend) { try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { } return; }
 
+            double price = Close[0];
+
+            // Structural bias
+            string ppBias  = lvlPP > 0 ? (price >= lvlPP ? "ABOVE PP" : "BELOW PP") : "PP n/a";
+            string ycBias  = lvlYC > 0 ? (price >= lvlYC ? "ABOVE YC" : "BELOW YC") : "YC n/a";
+            string biasArr = price >= lvlPP ? "↑" : "↓";
+
+            // Wall counts + nearest wall each side
+            int  rCount = lastKeptWalls.Count(w => w.Center >= price);
+            int  sCount = lastKeptWalls.Count(w => w.Center <  price);
+            Wall nAbove = lastKeptWalls.Where(w => w.Center >= price)
+                                       .OrderBy(w => w.Center).FirstOrDefault();
+            Wall nBelow = lastKeptWalls.Where(w => w.Center <  price)
+                                       .OrderByDescending(w => w.Center).FirstOrDefault();
+
+            string aboveLine = nAbove == null
+                ? "  (no resistance visible)"
+                : "  ↑ R " + FormatPrice(nAbove.Center)
+                  + "  [+" + FormatPrice(nAbove.Center - price) + " pts]  "
+                  + string.Join("+", nAbove.Members.Select(m => m.Code).Take(4));
+            string belowLine = nBelow == null
+                ? "  (no support visible)"
+                : "  ↓ S " + FormatPrice(nBelow.Center)
+                  + "  [-" + FormatPrice(price - nBelow.Center) + " pts]  "
+                  + string.Join("+", nBelow.Members.Select(m => m.Code).Take(4));
+
+            // Session context
+            double sesRange = (sesHi > 0 && sesLo > 0) ? sesHi - sesLo : 0;
+            string hiStr    = sesHi > 0 ? FormatPrice(sesHi) : "---";
+            string loStr    = sesLo > 0 ? FormatPrice(sesLo) : "---";
+            string rangeStr = sesRange > 0 ? FormatPrice(sesRange) + " pts" : "---";
+
+            // Session phase
+            TimeSpan now = Time[0].TimeOfDay;
+            string phase =
+                now < rthOpen                            ? "PRE-MARKET"    :
+                now < rthOpen  + new TimeSpan(0, 30, 0) ? "OPENING (30m)" :
+                now < rthOpen  + new TimeSpan(2,  0, 0) ? "MORNING"       :
+                now < rthClose - new TimeSpan(1,  0, 0) ? "MID-SESSION"   :
+                                                          "CLOSING";
+
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("═══ THREE PILLARS  WALLS " + VERSION + " ════════════");
-            sb.AppendLine("  Band = confluence zone");
-            sb.AppendLine("  Thicker + brighter = more stacked levels");
-            sb.AppendLine("    **  2 levels    ***  3 levels");
-            sb.AppendLine("    ****  4+ stacked  (strongest wall)");
-            sb.AppendLine("─────────────────────────────────────────");
-            sb.AppendLine("  R = resistance  (above current price)");
-            sb.AppendLine("  S = support     (below current price)");
-            sb.AppendLine("  ····  lone anchor  (dotted reference)");
-            sb.AppendLine("  HVOL = zone sits on heavy prior-day vol");
-            sb.AppendLine("─────────────────────────────────────────");
-            sb.AppendLine("  Codes: YH/YL/YC   ONH/ONL");
-            sb.AppendLine("  POC VAH/VAL   PP R1-3 S1-3");
-            sb.AppendLine("  PWH/PWL WPOC   PMH/PML");
-            sb.Append    ("  SH/SL   ORH/ORL");
+            sb.AppendLine("═══ MARKET CONTEXT ═════════════════════");
+            sb.AppendLine("  Bias:  " + biasArr + " " + ppBias + "  ·  " + ycBias);
+            sb.AppendLine("  Walls: " + rCount + "R above  ·  " + sCount + "S below");
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.AppendLine(aboveLine);
+            sb.AppendLine(belowLine);
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.AppendLine("  Session  Hi:" + hiStr + "  Lo:" + loStr);
+            sb.AppendLine("  Range:   " + rangeStr);
+            sb.AppendLine("  Phase:   " + phase);
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.AppendLine("  Band=zone  HVOL=heavy vol zone");
+            sb.Append    ("  ****=4+stacked  ···=lone anchor");
 
             TextPosition tp;
             switch (LegendPosition)
             {
-                case TPMLegendPosition.TopRight:   tp = TextPosition.TopRight;    break;
-                case TPMLegendPosition.BottomLeft: tp = TextPosition.BottomLeft;  break;
-                case TPMLegendPosition.BottomRight:tp = TextPosition.BottomRight; break;
-                default:                           tp = TextPosition.TopLeft;     break;
+                case TPMLegendPosition.TopRight:    tp = TextPosition.TopRight;    break;
+                case TPMLegendPosition.BottomLeft:  tp = TextPosition.BottomLeft;  break;
+                case TPMLegendPosition.BottomRight: tp = TextPosition.BottomRight; break;
+                default:                            tp = TextPosition.TopLeft;     break;
             }
 
             try
