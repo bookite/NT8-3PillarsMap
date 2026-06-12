@@ -191,6 +191,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         private List<Wall>            lastKeptWalls      = new List<Wall>();
         private double                sesHi              = 0;
         private double                sesLo              = 0;
+        private bool                         prevAbovePP    = false;
+        private List<double>                 nakedPOCPrices = new List<double>();
+        private HashSet<string>              nakedPOCTags   = new HashSet<string>();
 
         private class LevelCandidate
         {
@@ -257,6 +260,13 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Show Verification Output", GroupName = "Display", Order = 8,
             Description = "Print all calculated level values to the Output window each session.")]
         public bool ShowVerificationOutput { get; set; }
+
+        [Display(Name = "Alert On Bias Flip", GroupName = "Display", Order = 9,
+            Description = "Audible alert + vertical line when price crosses PP.")]
+        public bool AlertOnBiasFlip { get; set; }
+
+        [Display(Name = "Show Bias Flip Line", GroupName = "Display", Order = 10)]
+        public bool ShowBiasFlipLine { get; set; }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -285,6 +295,20 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Show Anchor Levels", GroupName = "Structural Walls", Order = 5,
             Description = "Always show prior-day H/L/C and today's POC/VAH/VAL even when not in a wall.")]
         public bool ShowAnchors { get; set; }
+
+        [Range(0.5, 5.0)]
+        [Display(Name = "Min R/R Ratio", GroupName = "Structural Walls", Order = 9,
+            Description = "R/R ratio in context panel. Check>=ratio, ~>=70%, X=below.")]
+        public double MinRRRatio { get; set; }
+
+        [Display(Name = "Show Approach Bands", GroupName = "Structural Walls", Order = 10,
+            Description = "Wider transparent zone around *** and **** walls.")]
+        public bool ShowApproachBands { get; set; }
+
+        [Range(10, 500)]
+        [Display(Name = "Approach Band Width (ticks)", GroupName = "Structural Walls", Order = 11,
+            Description = "Approach zone width beyond wall edge in ticks.")]
+        public int ApproachBandWidth { get; set; }
 
         [XmlIgnore]
         [Display(Name = "Resistance Wall Color", GroupName = "Structural Walls", Order = 6)]
@@ -370,6 +394,23 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Value Area %", GroupName = "Volume Profile", Order = 1,
             Description = "Percentage of total volume to include in the value area. Default 70.")]
         public double ValueAreaPercent { get; set; }
+
+        [Display(Name = "Show Naked POCs", GroupName = "Volume Profile", Order = 2,
+            Description = "Dashed magenta lines at prior session POCs not yet visited.")]
+        public bool ShowNakedPOC { get; set; }
+
+        [Range(1, 20)]
+        [Display(Name = "Naked POC Lookback (days)", GroupName = "Volume Profile", Order = 3)]
+        public int NakedPOCLookback { get; set; }
+
+        [Range(1, 100)]
+        [Display(Name = "Naked POC Visit Threshold (ticks)", GroupName = "Volume Profile", Order = 4,
+            Description = "Ticks from a naked POC to count as visited.")]
+        public int NakedPOCVisitThreshold { get; set; }
+
+        [Display(Name = "Show HVOL Bands", GroupName = "Volume Profile", Order = 5,
+            Description = "Shade high-volume zones as bands instead of HVOL text label.")]
+        public bool ShowHVOLBands { get; set; }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -738,6 +779,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 ResistanceColor             = Brushes.Crimson;
                 SupportColor                = Brushes.LimeGreen;
                 AnchorColor                 = Brushes.Silver;
+                MinRRRatio                  = 1.5;
+                ShowApproachBands           = true;
+                ApproachBandWidth           = 100;
+                AlertOnBiasFlip             = true;
+                ShowBiasFlipLine            = true;
+                ShowNakedPOC                = true;
+                NakedPOCLookback            = 5;
+                NakedPOCVisitThreshold      = 10;
+                ShowHVOLBands               = true;
             }
             else if (State == State.Configure)
             {
@@ -755,6 +805,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 drawnTags      = new List<string>();
                 wallTags.Clear();
                 lastWallBuildPrice = 0;
+                prevAbovePP        = false;
+                nakedPOCPrices.Clear();
+                nakedPOCTags.Clear();
                 ResetLevels();
             }
             else if (State == State.Terminated)
@@ -763,6 +816,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 foreach (string t in drawnTags)
                     try { RemoveDrawObject(t); } catch { }
                 try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { }
+                foreach (string t in nakedPOCTags)
+                    try { RemoveDrawObject(t); } catch { }
             }
         }
 
@@ -877,6 +932,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 // (4H OnBarClose) show correct values on the first draw
                 if (High[0] > sesHi) sesHi = High[0];
                 if (sesLo == 0 || Low[0] < sesLo) sesLo = Low[0];
+                if (lvlPP > 0) prevAbovePP = Close[0] >= lvlPP;
+                CalcNakedPOCs(barDate);
                 BuildAndDrawWalls();
             }
 
@@ -890,6 +947,30 @@ namespace NinjaTrader.NinjaScript.Indicators
                 BuildAndDrawWalls();
 
             // â”€â”€ OPENING RANGE TRACKING â”€â”€
+            // Bias flip detection (improvement 8)
+            if (AlertOnBiasFlip && lvlPP > 0)
+            {
+                bool abovePP = Close[0] >= lvlPP;
+                if (abovePP != prevAbovePP)
+                {
+                    Alert("BiasFlip", Priority.High,
+                        "BIAS FLIP: " + (abovePP ? "ABOVE PP " : "BELOW PP ") + FormatPrice(lvlPP),
+                        "Alert2.wav", 60, Brushes.Yellow, Brushes.Black);
+                    if (ShowBiasFlipLine)
+                    {
+                        string flipTag = TAG_PREFIX + "FLIP_" + CurrentBar;
+                        try
+                        {
+                            Draw.VerticalLine(this, flipTag, 0,
+                                abovePP ? Brushes.Cyan : Brushes.OrangeRed, DashStyleHelper.Dash, 2);
+                            if (!drawnTags.Contains(flipTag)) drawnTags.Add(flipTag);
+                        }
+                        catch { }
+                    }
+                }
+                prevAbovePP = abovePP;
+            }
+
             if (instrumentHasOR && !orComplete)
             {
                 if (barTime >= orStart && barTime < orEnd)
@@ -1679,7 +1760,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             foreach (var w in keep)
                 DrawWall(w, price, idx++);
             lastKeptWalls = keep;
-            DrawLegend();  // refresh context panel after each wall rebuild
+            DrawLegend();
+            DrawNakedPOCs();
         }
 
         private void DrawWall(Wall w, double price, int idx)
@@ -1692,8 +1774,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             string tagLine = tagBand + "_C";
             string tagLbl  = tagBand + "_L";
 
-            // Member-code string (cap listed at 4)
+            // Codes sorted by reference priority (improvement 3)
             var codes = w.Members.Select(m => m.Code).ToList();
+            var prio = new[] {"WPOC","WVAH","WVAL","PWH","PWL","PMH","PML","ONH","ONL","YH","YL","YC","SH","SL","POC","VAH","VAL","R1","S1","R2","S2","R3","S3","PP","RH","RL","ORH","ORL"};
+            codes = codes.OrderBy(c => { int pi = Array.IndexOf(prio, c); return pi < 0 ? 99 : pi; }).ToList();
             string codeStr = codes.Count <= 4
                 ? string.Join("+", codes)
                 : string.Join("+", codes.Take(4)) + "+" + (codes.Count - 4);
@@ -1722,6 +1806,20 @@ namespace NinjaTrader.NinjaScript.Indicators
                     RegWall(tagLine);
                 }
                 catch (Exception ex) { Print(LOG_PREFIX + " Wall line error: " + ex.Message); }
+
+                if (ShowApproachBands && w.Count >= 3)
+                {
+                    double bandPts     = ApproachBandWidth * TickSize;
+                    string tagApproach = tagBand + "_A";
+                    Brush  aFill       = WithOpacity(baseColor, 0.08);
+                    try
+                    {
+                        Draw.RegionHighlightY(this, tagApproach, false,
+                            w.Hi + bandPts, w.Lo - bandPts, Brushes.Transparent, aFill, 8);
+                        RegWall(tagApproach);
+                    }
+                    catch (Exception ex) { Print(LOG_PREFIX + " Approach band error: " + ex.Message); }
+                }
             }
             else
             {
@@ -1735,19 +1833,35 @@ namespace NinjaTrader.NinjaScript.Indicators
                 catch (Exception ex) { Print(LOG_PREFIX + " Anchor line error: " + ex.Message); }
             }
 
+            // HVOL band (improvement 11)
+            bool isHvol = false;
+            if (isWall && dayProfileAvg > 0)
+            {
+                double zv  = GetZoneVolume(w.Lo, w.Hi);
+                int    n   = (int)Math.Round(Math.Abs(w.Hi - w.Lo) / TickSize) + 1;
+                double za  = n > 0 ? zv / n : 0;
+                isHvol     = (zv > 0 && za >= dayProfileAvg);
+            }
+            if (ShowHVOLBands && isHvol)
+            {
+                string tagHvol = tagBand + "_HV";
+                Brush  hFill   = WithOpacity(Brushes.Gold, 0.12);
+                Brush  hBorder = WithOpacity(Brushes.Gold, 0.55);
+                try
+                {
+                    Draw.RegionHighlightY(this, tagHvol, false,
+                        w.Hi + TickSize, w.Lo - TickSize, hBorder, hFill, 12);
+                    RegWall(tagHvol);
+                }
+                catch (Exception ex) { Print(LOG_PREFIX + " HVOL band error: " + ex.Message); }
+            }
+
             if (ShowLabels)
             {
-                string stars = w.Count >= 4 ? " ****" : w.Count == 3 ? " ***" : w.Count == 2 ? " **" : "";
-                string side  = isResistance ? "R" : "S";
-                string hvol  = "";
-                if (isWall && dayProfileAvg > 0)
-                {
-                    double zv = GetZoneVolume(w.Lo, w.Hi);
-                    int    n  = (int)Math.Round(Math.Abs(w.Hi - w.Lo) / TickSize) + 1;
-                    double za = n > 0 ? zv / n : 0;
-                    if (zv > 0 && za >= dayProfileAvg) hvol = "  HVOL";
-                }
-                string text = side + " " + FormatPrice(w.Center) + stars + "  " + codeStr + hvol;
+                string stars   = w.Count >= 4 ? " ****" : w.Count == 3 ? " ***" : w.Count == 2 ? " **" : "";
+                string side    = isResistance ? "R" : "S";
+                string hvolTxt = (!ShowHVOLBands && isHvol) ? "  HVOL" : "";
+                string text    = side + " " + FormatPrice(w.Center) + stars + "  " + codeStr + hvolTxt;
                 Brush  txt  = isWall ? Brushes.White : WithOpacity(Brushes.White, 0.75);
                 int    fs   = isWall ? Math.Max(8, LabelFontSize) : Math.Max(7, LabelFontSize - 2);
                 try
@@ -1761,6 +1875,84 @@ namespace NinjaTrader.NinjaScript.Indicators
                 catch (Exception ex) { Print(LOG_PREFIX + " Wall label error: " + ex.Message); }
             }
         }
+
+        private void CalcNakedPOCs(DateTime today)
+        {
+            nakedPOCPrices.Clear();
+            if (!ShowNakedPOC || NakedPOCLookback <= 0) return;
+            int maxBars = Math.Min(CurrentBar, MAX_LOOKBACK_DAILY);
+            double visitThresh = NakedPOCVisitThreshold * TickSize;
+            var sessions = new List<(DateTime date, double poc)>();
+            DateTime curDate = DateTime.MinValue;
+            var sesProfile = new Dictionary<double, double>();
+            double sesTotalVol = 0;
+            int daysFound = 0;
+            for (int i = 1; i < maxBars && daysFound < NakedPOCLookback; i++)
+            {
+                DateTime bd = Time[i].Date;
+                if (bd >= today) continue;
+                if (!IsRTHBar(Time[i].TimeOfDay)) continue;
+                if (bd != curDate)
+                {
+                    if (curDate != DateTime.MinValue && sesProfile.Count > 0)
+                    {
+                        double poc, vah, val;
+                        CalcValueArea(sesProfile, sesTotalVol, out poc, out vah, out val);
+                        if (poc > 0) { sessions.Add((curDate, poc)); daysFound++; }
+                    }
+                    curDate = bd; sesProfile.Clear(); sesTotalVol = 0;
+                }
+                AddToProfile(sesProfile, High[i], Low[i], Volume[i]);
+                sesTotalVol += Volume[i];
+            }
+            if (curDate != DateTime.MinValue && sesProfile.Count > 0 && daysFound < NakedPOCLookback)
+            {
+                double poc, vah, val;
+                CalcValueArea(sesProfile, sesTotalVol, out poc, out vah, out val);
+                if (poc > 0) sessions.Add((curDate, poc));
+            }
+            foreach (var (sDate, poc) in sessions)
+            {
+                bool visited = false;
+                if (sesHi > 0 && sesLo > 0 && sesLo <= poc + visitThresh && sesHi >= poc - visitThresh)
+                    visited = true;
+                else
+                {
+                    for (int i = 1; i < maxBars && !visited; i++)
+                    {
+                        DateTime bd = Time[i].Date;
+                        if (bd >= today || bd <= sDate) continue;
+                        if (!IsRTHBar(Time[i].TimeOfDay)) continue;
+                        if (Low[i] <= poc + visitThresh && High[i] >= poc - visitThresh) visited = true;
+                    }
+                }
+                if (!visited) nakedPOCPrices.Add(poc);
+            }
+        }
+
+        private void DrawNakedPOCs()
+        {
+            foreach (string t in nakedPOCTags.ToList())
+                try { RemoveDrawObject(t); } catch { }
+            nakedPOCTags.Clear();
+            if (!ShowNakedPOC || nakedPOCPrices.Count == 0) return;
+            double visitThresh = NakedPOCVisitThreshold * TickSize;
+            for (int idx = nakedPOCPrices.Count - 1; idx >= 0; idx--)
+            {
+                double poc = nakedPOCPrices[idx];
+                if (sesHi > 0 && sesLo > 0 && sesLo <= poc + visitThresh && sesHi >= poc - visitThresh)
+                { nakedPOCPrices.RemoveAt(idx); continue; }
+                string tag = TAG_PREFIX + "NPOC_" + idx;
+                try
+                {
+                    Draw.HorizontalLine(this, tag, false, poc,
+                        WithOpacity(Brushes.Magenta, 0.80), DashStyleHelper.Dash, 1);
+                    nakedPOCTags.Add(tag);
+                }
+                catch (Exception ex) { Print(LOG_PREFIX + " NakedPOC error: " + ex.Message); }
+            }
+        }
+
         #endregion
 
         // =================================================================
@@ -1997,39 +2189,40 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (!ShowLegend) { try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { } return; }
 
-            double price = Close[0];
-
-            // Structural bias
+            double price   = Close[0];
             string ppBias  = lvlPP > 0 ? (price >= lvlPP ? "ABOVE PP" : "BELOW PP") : "PP n/a";
             string ycBias  = lvlYC > 0 ? (price >= lvlYC ? "ABOVE YC" : "BELOW YC") : "YC n/a";
             string biasArr = price >= lvlPP ? "↑" : "↓";
 
-            // Wall counts + nearest wall each side
-            int  rCount = lastKeptWalls.Count(w => w.Center >= price);
-            int  sCount = lastKeptWalls.Count(w => w.Center <  price);
-            Wall nAbove = lastKeptWalls.Where(w => w.Center >= price)
-                                       .OrderBy(w => w.Center).FirstOrDefault();
-            Wall nBelow = lastKeptWalls.Where(w => w.Center <  price)
-                                       .OrderByDescending(w => w.Center).FirstOrDefault();
+            string[] prio = new string[] {"WPOC","WVAH","WVAL","PWH","PWL","PMH","PML","ONH","ONL","YH","YL","YC","SH","SL","POC","VAH","VAL","R1","S1","R2","S2","R3","S3","PP","RH","RL","ORH","ORL"};
 
-            string aboveLine = nAbove == null
-                ? "  (no resistance visible)"
-                : "  ↑ R " + FormatPrice(nAbove.Center)
-                  + "  [+" + FormatPrice(nAbove.Center - price) + " pts]  "
-                  + string.Join("+", nAbove.Members.Select(m => m.Code).Take(4));
-            string belowLine = nBelow == null
-                ? "  (no support visible)"
-                : "  ↓ S " + FormatPrice(nBelow.Center)
-                  + "  [-" + FormatPrice(price - nBelow.Center) + " pts]  "
-                  + string.Join("+", nBelow.Members.Select(m => m.Code).Take(4));
+            var aboveWalls = lastKeptWalls.Where(w => w.Center >= price).OrderBy(w => w.Center).Take(3).ToList();
+            var belowWalls = lastKeptWalls.Where(w => w.Center <  price).OrderByDescending(w => w.Center).Take(3).ToList();
+            int rCount     = lastKeptWalls.Count(w => w.Center >= price);
+            int sCount     = lastKeptWalls.Count(w => w.Center <  price);
 
-            // Session context
+            double rangePts  = 500.0;
+            int    rCount500 = lastKeptWalls.Count(w => w.Center >= price && w.Center <= price + rangePts);
+            int    sCount500 = lastKeptWalls.Count(w => w.Center <  price && w.Center >= price - rangePts);
+            string rDensity  = rCount500 == 0 ? "CLEAR" : rCount500 >= 4 ? "STACKED" : rCount500 == 1 ? "WIDE" : "NORMAL";
+            string sDensity  = sCount500 == 0 ? "CLEAR" : sCount500 >= 4 ? "STACKED" : sCount500 == 1 ? "WIDE" : "NORMAL";
+
+            string rrLine;
+            if (aboveWalls.Count > 0 && belowWalls.Count > 0)
+            {
+                double rDist = aboveWalls[0].Center - price;
+                double sDist = price - belowWalls[0].Center;
+                double rr    = sDist > 0 ? rDist / sDist : 0;
+                string rrSym = rr >= MinRRRatio ? "[OK]" : rr >= MinRRRatio - 0.5 ? "[~]" : "[X]";
+                rrLine = string.Format("  R/R {0:F2}x {1}  (R:+{2}  S:-{3} pts)", rr, rrSym, FormatPrice(rDist), FormatPrice(sDist));
+            }
+            else rrLine = "  R/R  n/a (no walls)";
+
             double sesRange = (sesHi > 0 && sesLo > 0) ? sesHi - sesLo : 0;
             string hiStr    = sesHi > 0 ? FormatPrice(sesHi) : "---";
             string loStr    = sesLo > 0 ? FormatPrice(sesLo) : "---";
             string rangeStr = sesRange > 0 ? FormatPrice(sesRange) + " pts" : "---";
 
-            // Session phase
             TimeSpan now = Time[0].TimeOfDay;
             string phase =
                 now < rthOpen                            ? "PRE-MARKET"    :
@@ -2040,18 +2233,44 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("═══ MARKET CONTEXT ═════════════════════");
-            sb.AppendLine("  Bias:  " + biasArr + " " + ppBias + "  ·  " + ycBias);
-            sb.AppendLine("  Walls: " + rCount + "R above  ·  " + sCount + "S below");
+            sb.AppendLine("  Bias: " + biasArr + " " + ppBias + "  ·  " + ycBias);
             sb.AppendLine("  ────────────────────────────────────");
-            sb.AppendLine(aboveLine);
-            sb.AppendLine(belowLine);
+            if (aboveWalls.Count == 0)
+            {
+                sb.AppendLine("  (no resistance walls)");
+            }
+            else
+            {
+                for (int ri = 0; ri < aboveWalls.Count; ri++)
+                {
+                    var wR  = aboveWalls[ri];
+                    var csR = wR.Members.Select(m => m.Code).OrderBy(c => { int pi = Array.IndexOf(prio, c); return pi < 0 ? 99 : pi; }).Take(3);
+                    sb.AppendLine("  R" + (ri+1) + " " + FormatPrice(wR.Center) + "  [+" + FormatPrice(wR.Center - price) + " pts]  " + string.Join("+", csR));
+                }
+            }
+            sb.AppendLine("  ────────────────────────────────────");
+            if (belowWalls.Count == 0)
+            {
+                sb.AppendLine("  (no support walls)");
+            }
+            else
+            {
+                for (int si = 0; si < belowWalls.Count; si++)
+                {
+                    var wS  = belowWalls[si];
+                    var csS = wS.Members.Select(m => m.Code).OrderBy(c => { int pi = Array.IndexOf(prio, c); return pi < 0 ? 99 : pi; }).Take(3);
+                    sb.AppendLine("  S" + (si+1) + " " + FormatPrice(wS.Center) + "  [-" + FormatPrice(price - wS.Center) + " pts]  " + string.Join("+", csS));
+                }
+            }
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.AppendLine(rrLine);
+            sb.AppendLine("  Density: R " + rDensity + "  S " + sDensity);
             sb.AppendLine("  ────────────────────────────────────");
             sb.AppendLine("  Session  Hi:" + hiStr + "  Lo:" + loStr);
             sb.AppendLine("  Range:   " + rangeStr);
             sb.AppendLine("  Phase:   " + phase);
             sb.AppendLine("  ────────────────────────────────────");
-            sb.AppendLine("  Band=zone  HVOL=heavy vol zone");
-            sb.Append    ("  ****=4+stacked  ···=lone anchor");
+            sb.Append    ("  **=cluster  ***=wall  ****=4+stacked");
 
             TextPosition tp;
             switch (LegendPosition)
