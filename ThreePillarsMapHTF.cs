@@ -218,7 +218,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (CurrentBar < SwingStrength * 2 + 5) return;
 
             // GatherSwings reads all history; only draw on the final bar.
-            if (State == State.Historical && !IsLastBarOnChart) return;
+            if (State == State.Historical && CurrentBar < Count - 1) return;
             BuildAndDrawWalls();
             DrawLegend();
         }
