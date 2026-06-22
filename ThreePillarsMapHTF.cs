@@ -388,10 +388,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             string tagLine = tagBand + "_C";
             string tagLbl  = tagBand + "_L";
 
-            bool hasH = w.Members.Any(m => m.Code == "H" || m.Code == "RH");
-            bool hasL = w.Members.Any(m => m.Code == "L" || m.Code == "RL");
             bool isRangeExtreme = w.Count == 1 && (w.Members[0].Code == "RH" || w.Members[0].Code == "RL");
-            string kind = hasH && hasL ? "S/R" : hasH ? "H" : "L";
+            string kind = GetKind(w);
 
             if (isWall)
             {
