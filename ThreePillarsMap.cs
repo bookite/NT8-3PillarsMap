@@ -1655,8 +1655,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             // 4H swings
             for (int k = 0; k < 3; k++)
             {
-                Add(lvlSwingH[k], "SH", 1.5, false, false);
-                Add(lvlSwingL[k], "SL", 1.5, false, false);
+                Add(lvlSwingH[k], "SH" + (k + 1), 1.5, false, false);
+                Add(lvlSwingL[k], "SL" + (k + 1), 1.5, false, false);
             }
             // Range extremes: overall RTH high/low across the lookback window.
             // Ensures a reference wall exists below AND above price on big breakout days
@@ -1776,7 +1776,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // Codes sorted by reference priority (improvement 3)
             var codes = w.Members.Select(m => m.Code).ToList();
-            var prio = new[] {"WPOC","WVAH","WVAL","PWH","PWL","PMH","PML","ONH","ONL","YH","YL","YC","SH","SL","POC","VAH","VAL","R1","S1","R2","S2","R3","S3","PP","RH","RL","ORH","ORL"};
+            var prio = new[] {"WPOC","WVAH","WVAL","PWH","PWL","PMH","PML","ONH","ONL","YH","YL","YC","SH1","SH2","SH3","SL1","SL2","SL3","POC","VAH","VAL","R1","S1","R2","S2","R3","S3","PP","RH","RL","ORH","ORL"};
             codes = codes.OrderBy(c => { int pi = Array.IndexOf(prio, c); return pi < 0 ? 99 : pi; }).ToList();
             string codeStr = codes.Count <= 4
                 ? string.Join("+", codes)
@@ -2194,7 +2194,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             string ycBias  = lvlYC > 0 ? (price >= lvlYC ? "ABOVE YC" : "BELOW YC") : "YC n/a";
             string biasArr = price >= lvlPP ? "↑" : "↓";
 
-            string[] prio = new string[] {"WPOC","WVAH","WVAL","PWH","PWL","PMH","PML","ONH","ONL","YH","YL","YC","SH","SL","POC","VAH","VAL","R1","S1","R2","S2","R3","S3","PP","RH","RL","ORH","ORL"};
+            string[] prio = new string[] {"WPOC","WVAH","WVAL","PWH","PWL","PMH","PML","ONH","ONL","YH","YL","YC","SH1","SH2","SH3","SL1","SL2","SL3","POC","VAH","VAL","R1","S1","R2","S2","R3","S3","PP","RH","RL","ORH","ORL"};
 
             var aboveWalls = lastKeptWalls.Where(w => w.Center >= price).OrderBy(w => w.Center).Take(3).ToList();
             var belowWalls = lastKeptWalls.Where(w => w.Center <  price).OrderByDescending(w => w.Center).Take(3).ToList();
