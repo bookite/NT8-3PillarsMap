@@ -61,11 +61,24 @@
 //     ShowMonthlyLevels        â€” Prior month levels (default false)
 //     ShowSwingLevels          â€” 4H swing high/low levels
 //
+//   Structural Walls
+//     MaxWallsPerSide          â€” Confluence walls drawn above/below price (default 5)
+//     MinConfluence            â€” Min overlapping levels to count as a wall (default 2)
+//     ClusterTolerancePercent  â€” % of price within which levels merge (default 0.05)
+//     WallRangePercent         â€” % of price defining the visible wall range (default 1.5)
+//     ShowAnchors              â€” Always show prior-day H/L/C + today's POC/VAH/VAL
+//     MinRRRatio               â€” R/R threshold used by the context panel (default 1.5)
+//     ShowApproachBands        â€” Wider transparent zone around 3+/4+ touch walls
+//     ApproachBandWidth        â€” Approach zone width in ticks (default 100)
+//
 //   Volume Profile
 //     ValueAreaPercent         â€” Target % of volume in value area (50â€“90, default 70)
 //
 //   Swing Detection
-//     SwingStrength            â€” Bars each side a pivot must dominate (1â€“10, default 3)
+//     SwingStrength            â€” Bars each side a pivot must dominate (1â€“30, default 3;
+//                                role defaults auto-apply per ChartRole, see ApplyRoleDefaults)
+//     ShowSwingMarkers         â€” Dot + dotted line at every confirmed swing pivot
+//                                (all bars, including overnight). Off by default on 3M/1M.
 //
 //   Manual 4H Swing Levels    â€” Enter manually from your 4H chart if desired.
 //                                Value 0 = not drawn.
@@ -986,6 +999,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             // Track today's RTH session extremes for the context panel
             if (High[0] > sesHi) sesHi = High[0];
             if (sesLo == 0 || Low[0] < sesLo) sesLo = Low[0];
+            UpdateCurrentWeekExtremes();
 
             // â”€â”€ Rebuild walls when price drifts, so R/S sides stay correct as price moves â”€â”€
             if (lastWallBuildPrice > 0
@@ -1347,273 +1361,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         #endregion
 
         // =================================================================
-        #region Draw Levels For Role
-
-        private void DrawLevelsForRole()
-        {
-            switch (ChartRole)
-            {
-                case ChartRole.Daily:         DrawDaily();         break;
-                case ChartRole.FourHour:      DrawFourHour();      break;
-                case ChartRole.OneHour:       DrawOneHour();       break;
-                case ChartRole.FifteenMinute: DrawFifteenMinute(); break;
-                case ChartRole.ThreeMinute:   DrawThreeMinute();   break;
-                case ChartRole.OneMinute:     DrawOneMinute();     break;
-            }
-        }
-
-        // â”€â”€ Daily Chart â”€â”€
-        private void DrawDaily()
-        {
-            // Tier 1: PMH, PML, PWH, PWL
-            if (ShowMonthlyLevels)
-            {
-                DrawT1(TAG_PREFIX + "PMH_" + dateTag, lvlPMH, PMHColor, DashStyleHelper.Solid, "PMH");
-                DrawT1(TAG_PREFIX + "PML_" + dateTag, lvlPML, PMLColor, DashStyleHelper.Solid, "PML");
-            }
-            if (ShowWeeklyLevels)
-            {
-                DrawT1(TAG_PREFIX + "PWH_" + dateTag, lvlPWH, PWHColor, DashStyleHelper.Solid, "PWH");
-                DrawT1(TAG_PREFIX + "PWL_" + dateTag, lvlPWL, PWLColor, DashStyleHelper.Solid, "PWL");
-                // Tier 2: week POC, VAH, VAL, CWH, CWL
-                DrawT2(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC, WeeklyPOCColor, DashStyleHelper.Solid,  "WPOC");
-                DrawT2(TAG_PREFIX + "WVAH_" + dateTag, lvlWeekVAH, WeeklyVAHColor, DashStyleHelper.Solid,  "WVAH");
-                DrawT2(TAG_PREFIX + "WVAL_" + dateTag, lvlWeekVAL, WeeklyVALColor, DashStyleHelper.Solid,  "WVAL");
-                DrawT2(TAG_PREFIX + "CWH_"  + dateTag, lvlCWH,     CWHColor,       DashStyleHelper.Dot,    "CWH");
-                DrawT2(TAG_PREFIX + "CWL_"  + dateTag, lvlCWL,     CWLColor,       DashStyleHelper.Dot,    "CWL");
-            }
-        }
-
-        // â”€â”€ 4H Chart â”€â”€
-        private void DrawFourHour()
-        {
-            if (ShowWeeklyLevels)
-            {
-                DrawT1(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH,    PWHColor,     DashStyleHelper.Solid, "PWH");
-                DrawT1(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL,    PWLColor,     DashStyleHelper.Solid, "PWL");
-                DrawT1(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC,WeeklyPOCColor,DashStyleHelper.Solid,"WPOC");
-                DrawT2(TAG_PREFIX + "WVAH_" + dateTag, lvlWeekVAH,WeeklyVAHColor,DashStyleHelper.Solid,"WVAH");
-                DrawT2(TAG_PREFIX + "WVAL_" + dateTag, lvlWeekVAL,WeeklyVALColor,DashStyleHelper.Solid,"WVAL");
-            }
-            if (ShowYH) DrawT2(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
-            if (ShowYL) DrawT2(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL");
-            if (ShowPOC) DrawT2(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, DashStyleHelper.Solid,"POC");
-            if (ShowSwingLevels)
-            {
-                for (int k = 0; k < 3; k++)
-                {
-                    if (lvlSwingH[k] > 0) DrawT2(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, DashStyleHelper.Dash, "SH" + (k+1));
-                    if (lvlSwingL[k] > 0) DrawT2(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  DashStyleHelper.Dash, "SL" + (k+1));
-                }
-            }
-            // Tier 3
-            if (ShowMonthlyLevels)
-            {
-                DrawT3(TAG_PREFIX + "PMH_" + dateTag, lvlPMH, PMHColor, "PMH");
-                DrawT3(TAG_PREFIX + "PML_" + dateTag, lvlPML, PMLColor, "PML");
-            }
-        }
-
-        // â”€â”€ 1H Chart â”€â”€
-        private void DrawOneHour()
-        {
-            if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
-            if (ShowYL) DrawT1(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL");
-            if (ShowPOC) DrawT1(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, DashStyleHelper.Solid,"POC");
-            if (ShowPivots)
-            {
-                DrawT1(TAG_PREFIX + "PP_"  + dateTag, lvlPP, PPColor, DashStyleHelper.Dash, "PP");
-                DrawT2(TAG_PREFIX + "R1_"  + dateTag, lvlR1, R1Color, DashStyleHelper.Dash, "R1");
-                DrawT2(TAG_PREFIX + "S1_"  + dateTag, lvlS1, S1Color, DashStyleHelper.Dash, "S1");
-            }
-            if (ShowONH)
-            {
-                int ow = lvlONH > lvlYH ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONH_" + dateTag, lvlONH, ONHColor, DashStyleHelper.Dot, ow, "ONH", lvlONH > lvlYH ? 1 : 2);
-            }
-            if (ShowONL)
-            {
-                int ow = lvlONL < lvlYL ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONL_" + dateTag, lvlONL, ONLColor, DashStyleHelper.Dot, ow, "ONL", lvlONL < lvlYL ? 1 : 2);
-            }
-            if (ShowVAH) DrawT2(TAG_PREFIX + "VAH_" + dateTag, lvlVAH, VAHColor, DashStyleHelper.Solid, "VAH");
-            if (ShowVAL) DrawT2(TAG_PREFIX + "VAL_" + dateTag, lvlVAL, VALColor, DashStyleHelper.Solid, "VAL");
-            // Tier 3
-            if (ShowR2S2)
-            {
-                DrawT3(TAG_PREFIX + "R2_" + dateTag, lvlR2, R2Color, "R2");
-                DrawT3(TAG_PREFIX + "S2_" + dateTag, lvlS2, S2Color, "S2");
-            }
-            if (ShowR3S3)
-            {
-                DrawT3(TAG_PREFIX + "R3_" + dateTag, lvlR3, R3Color, "R3");
-                DrawT3(TAG_PREFIX + "S3_" + dateTag, lvlS3, S3Color, "S3");
-            }
-            if (ShowWeeklyLevels)
-            {
-                DrawT3(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH,     PWHColor,     "PWH");
-                DrawT3(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL,     PWLColor,     "PWL");
-                DrawT3(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC, WeeklyPOCColor,"WPOC");
-            }
-            if (ShowSwingLevels)
-                for (int k = 0; k < 3; k++)
-                {
-                    if (lvlSwingH[k] > 0) DrawT3(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, "SH" + (k+1));
-                    if (lvlSwingL[k] > 0) DrawT3(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  "SL" + (k+1));
-                }
-        }
-
-        // â”€â”€ 15M Chart â”€â”€
-        private void DrawFifteenMinute()
-        {
-            if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
-            if (ShowYL) DrawT1(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL");
-            if (ShowPOC) DrawT1(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, DashStyleHelper.Solid,"POC");
-            if (ShowPivots)
-            {
-                DrawT1(TAG_PREFIX + "PP_"  + dateTag, lvlPP, PPColor, DashStyleHelper.Dash, "PP");
-                DrawT2(TAG_PREFIX + "R1_"  + dateTag, lvlR1, R1Color, DashStyleHelper.Dash, "R1");
-                DrawT2(TAG_PREFIX + "S1_"  + dateTag, lvlS1, S1Color, DashStyleHelper.Dash, "S1");
-            }
-            if (ShowONH)
-            {
-                int ow = lvlONH > lvlYH ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONH_" + dateTag, lvlONH, ONHColor, DashStyleHelper.Dot, ow, "ONH", lvlONH > lvlYH ? 1 : 2);
-            }
-            if (ShowONL)
-            {
-                int ow = lvlONL < lvlYL ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONL_" + dateTag, lvlONL, ONLColor, DashStyleHelper.Dot, ow, "ONL", lvlONL < lvlYL ? 1 : 2);
-            }
-            if (ShowVAH) DrawT2(TAG_PREFIX + "VAH_" + dateTag, lvlVAH, VAHColor, DashStyleHelper.Solid, "VAH");
-            if (ShowVAL) DrawT2(TAG_PREFIX + "VAL_" + dateTag, lvlVAL, VALColor, DashStyleHelper.Solid, "VAL");
-            // OR drawn by DrawOpeningRangeLevels() after 9:45
-            // Tier 3
-            if (ShowR2S2)
-            {
-                DrawT3(TAG_PREFIX + "R2_" + dateTag, lvlR2, R2Color, "R2");
-                DrawT3(TAG_PREFIX + "S2_" + dateTag, lvlS2, S2Color, "S2");
-            }
-            if (ShowR3S3)
-            {
-                DrawT3(TAG_PREFIX + "R3_" + dateTag, lvlR3, R3Color, "R3");
-                DrawT3(TAG_PREFIX + "S3_" + dateTag, lvlS3, S3Color, "S3");
-            }
-            if (ShowWeeklyLevels)
-            {
-                DrawT3(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH,     PWHColor,      "PWH");
-                DrawT3(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL,     PWLColor,      "PWL");
-                DrawT3(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC, WeeklyPOCColor,"WPOC");
-            }
-            if (ShowSwingLevels)
-                for (int k = 0; k < 3; k++)
-                {
-                    if (lvlSwingH[k] > 0) DrawT3(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, "SH" + (k+1));
-                    if (lvlSwingL[k] > 0) DrawT3(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  "SL" + (k+1));
-                }
-        }
-
-        // â”€â”€ 3M Chart â”€â”€
-        private void DrawThreeMinute()
-        {
-            if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
-            if (ShowYL) DrawT1(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL");
-            if (ShowPOC) DrawT1(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, DashStyleHelper.Solid,"POC");
-            if (ShowPivots) DrawT1(TAG_PREFIX + "PP_"   + dateTag, lvlPP, PPColor, DashStyleHelper.Dash, "PP");
-            // OR added after 9:45 via DrawOpeningRangeLevels()
-            if (ShowPivots)
-            {
-                DrawT2(TAG_PREFIX + "R1_"  + dateTag, lvlR1, R1Color, DashStyleHelper.Dash, "R1");
-                DrawT2(TAG_PREFIX + "S1_"  + dateTag, lvlS1, S1Color, DashStyleHelper.Dash, "S1");
-            }
-            if (ShowONH)
-            {
-                int ow = lvlONH > lvlYH ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONH_" + dateTag, lvlONH, ONHColor, DashStyleHelper.Dot, ow, "ONH", lvlONH > lvlYH ? 1 : 2);
-            }
-            if (ShowONL)
-            {
-                int ow = lvlONL < lvlYL ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONL_" + dateTag, lvlONL, ONLColor, DashStyleHelper.Dot, ow, "ONL", lvlONL < lvlYL ? 1 : 2);
-            }
-            // Tier 3
-            if (ShowR2S2)
-            {
-                DrawT3(TAG_PREFIX + "R2_" + dateTag, lvlR2, R2Color, "R2");
-                DrawT3(TAG_PREFIX + "S2_" + dateTag, lvlS2, S2Color, "S2");
-            }
-            if (ShowR3S3)
-            {
-                DrawT3(TAG_PREFIX + "R3_" + dateTag, lvlR3, R3Color, "R3");
-                DrawT3(TAG_PREFIX + "S3_" + dateTag, lvlS3, S3Color, "S3");
-            }
-            if (ShowWeeklyLevels)
-            {
-                DrawT3(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH,     PWHColor,      "PWH");
-                DrawT3(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL,     PWLColor,      "PWL");
-                DrawT3(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC, WeeklyPOCColor,"WPOC");
-            }
-            if (ShowVAH) DrawT3(TAG_PREFIX + "VAH_" + dateTag, lvlVAH, VAHColor, "VAH");
-            if (ShowVAL) DrawT3(TAG_PREFIX + "VAL_" + dateTag, lvlVAL, VALColor, "VAL");
-            if (ShowSwingLevels)
-                for (int k = 0; k < 3; k++)
-                {
-                    if (lvlSwingH[k] > 0) DrawT3(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, "SH" + (k+1));
-                    if (lvlSwingL[k] > 0) DrawT3(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  "SL" + (k+1));
-                }
-        }
-
-        // â”€â”€ 1M Chart â”€â”€
-        private void DrawOneMinute()
-        {
-            // Tier 1: PP only
-            if (ShowPivots) DrawT1(TAG_PREFIX + "PP_" + dateTag, lvlPP, PPColor, DashStyleHelper.Dash, "PP");
-
-            // Everything else is Tier 3 with tight threshold
-            if (ShowYH)    DrawT3(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  "YH");
-            if (ShowYL)    DrawT3(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  "YL");
-            if (ShowPOC)   DrawT3(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, "POC");
-            if (ShowONH)   DrawT3(TAG_PREFIX + "ONH_"  + dateTag, lvlONH, ONHColor, "ONH");
-            if (ShowONL)   DrawT3(TAG_PREFIX + "ONL_"  + dateTag, lvlONL, ONLColor, "ONL");
-            if (ShowPivots)
-            {
-                DrawT3(TAG_PREFIX + "R1_" + dateTag, lvlR1, R1Color, "R1");
-                DrawT3(TAG_PREFIX + "S1_" + dateTag, lvlS1, S1Color, "S1");
-            }
-        }
-
-        // â”€â”€ Opening Range (called after 9:45 AM) â”€â”€
-        private void DrawOpeningRangeLevels()
-        {
-            if (!instrumentHasOR || !ShowOR) return;
-            if (lvlORH == 0 || lvlORL == 0) return;
-
-            // OR is Tier 1 on 3M, Tier 2 on 15M
-            if (ChartRole == ChartRole.ThreeMinute || ChartRole == ChartRole.OneMinute)
-            {
-                DrawT1(TAG_PREFIX + "ORH_" + dateTag, lvlORH, ORHighColor, DashStyleHelper.Dash, "ORH");
-                DrawT1(TAG_PREFIX + "ORL_" + dateTag, lvlORL, ORLowColor,  DashStyleHelper.Dash, "ORL");
-            }
-            else if (ChartRole == ChartRole.FifteenMinute || ChartRole == ChartRole.OneHour)
-            {
-                DrawT2(TAG_PREFIX + "ORH_" + dateTag, lvlORH, ORHighColor, DashStyleHelper.Dash, "ORH");
-                DrawT2(TAG_PREFIX + "ORL_" + dateTag, lvlORL, ORLowColor,  DashStyleHelper.Dash, "ORL");
-            }
-        }
-        #endregion
-
-        // =================================================================
         #region Drawing Primitives
-
-        // Tier-specific draw helpers
-        private void DrawT1(string tag, double price, Brush color, DashStyleHelper dash, string lbl)
-            => DrawTier(tag, price, color, dash, LineThicknessPrimary, lbl, 1);
-
-        private void DrawT2(string tag, double price, Brush color, DashStyleHelper dash, string lbl)
-            => DrawTier(tag, price, color, dash, LineThicknessSecondary, lbl, 2);
-
-        private void DrawT3(string tag, double price, Brush color, string lbl)
-            => DrawTier(tag, price, color, DashStyleHelper.Dot, 1, lbl, 3);
 
         // Core draw method
         private void DrawTier(string tag, double price, Brush color, DashStyleHelper dash,
@@ -1711,42 +1459,58 @@ namespace NinjaTrader.NinjaScript.Indicators
             void Add(double p, string code, double w, bool anchor, bool key)
             { if (p > 0) c.Add(new LevelCandidate { Price = p, Code = code, Weight = w, IsAnchor = anchor, IsKey = key }); }
 
-            // Anchors â€” prior-day refs, always shown
-            Add(lvlYH,  "YH",  2.5, true,  false);
-            Add(lvlYL,  "YL",  2.5, true,  false);
+            // Anchors â€” prior-day refs, always shown (YC has no toggle, always on)
+            if (ShowYH)  Add(lvlYH,  "YH",  2.5, true,  false);
+            if (ShowYL)  Add(lvlYL,  "YL",  2.5, true,  false);
             Add(lvlYC,  "YC",  1.5, true,  false);
-            Add(lvlPOC, "POC", 3.0, true,  false);
-            Add(lvlVAH, "VAH", 2.0, true,  false);
-            Add(lvlVAL, "VAL", 2.0, true,  false);
+            if (ShowPOC) Add(lvlPOC, "POC", 3.0, true,  false);
+            if (ShowVAH) Add(lvlVAH, "VAH", 2.0, true,  false);
+            if (ShowVAL) Add(lvlVAL, "VAL", 2.0, true,  false);
 
             // Overnight
-            Add(lvlONH, "ONH", 1.5, false, false);
-            Add(lvlONL, "ONL", 1.5, false, false);
+            if (ShowONH) Add(lvlONH, "ONH", 1.5, false, false);
+            if (ShowONL) Add(lvlONL, "ONL", 1.5, false, false);
             // Pivots
-            Add(lvlPP, "PP", 1.5, false, false);
-            Add(lvlR1, "R1", 1.2, false, false);
-            Add(lvlS1, "S1", 1.2, false, false);
-            Add(lvlR2, "R2", 1.0, false, true);
-            Add(lvlS2, "S2", 1.0, false, true);
-            Add(lvlR3, "R3", 0.8, false, true);
-            Add(lvlS3, "S3", 0.8, false, true);
-            // Weekly â€” PWH/PWL/WPOC are key (show lone when near price)
-            Add(lvlPWH,     "PWH",  2.5, false, true);
-            Add(lvlPWL,     "PWL",  2.5, false, true);
-            Add(lvlWeekPOC, "WPOC", 2.5, false, true);
-            Add(lvlWeekVAH, "WVAH", 2.0, false, false);
-            Add(lvlWeekVAL, "WVAL", 2.0, false, false);
-            // Monthly â€” key
-            Add(lvlPMH, "PMH", 2.0, false, true);
-            Add(lvlPML, "PML", 2.0, false, true);
-            // Opening range (once complete)
-            if (orComplete) { Add(lvlORH, "ORH", 1.2, false, false); Add(lvlORL, "ORL", 1.2, false, false); }
-            // 4H swings
-            for (int k = 0; k < 3; k++)
+            if (ShowPivots)
             {
-                Add(lvlSwingH[k], "SH" + (k + 1), 1.5, false, false);
-                Add(lvlSwingL[k], "SL" + (k + 1), 1.5, false, false);
+                Add(lvlPP, "PP", 1.5, false, false);
+                Add(lvlR1, "R1", 1.2, false, false);
+                Add(lvlS1, "S1", 1.2, false, false);
             }
+            if (ShowR2S2)
+            {
+                Add(lvlR2, "R2", 1.0, false, true);
+                Add(lvlS2, "S2", 1.0, false, true);
+            }
+            if (ShowR3S3)
+            {
+                Add(lvlR3, "R3", 0.8, false, true);
+                Add(lvlS3, "S3", 0.8, false, true);
+            }
+            // Weekly â€” PWH/PWL/WPOC are key (show lone when near price)
+            if (ShowWeeklyLevels)
+            {
+                Add(lvlPWH,     "PWH",  2.5, false, true);
+                Add(lvlPWL,     "PWL",  2.5, false, true);
+                Add(lvlWeekPOC, "WPOC", 2.5, false, true);
+                Add(lvlWeekVAH, "WVAH", 2.0, false, false);
+                Add(lvlWeekVAL, "WVAL", 2.0, false, false);
+            }
+            // Monthly â€” key
+            if (ShowMonthlyLevels)
+            {
+                Add(lvlPMH, "PMH", 2.0, false, true);
+                Add(lvlPML, "PML", 2.0, false, true);
+            }
+            // Opening range (once complete)
+            if (orComplete && ShowOR) { Add(lvlORH, "ORH", 1.2, false, false); Add(lvlORL, "ORL", 1.2, false, false); }
+            // 4H swings
+            if (ShowSwingLevels)
+                for (int k = 0; k < 3; k++)
+                {
+                    Add(lvlSwingH[k], "SH" + (k + 1), 1.5, false, false);
+                    Add(lvlSwingL[k], "SL" + (k + 1), 1.5, false, false);
+                }
             // Range extremes: overall RTH high/low across the lookback window.
             // Ensures a reference wall exists below AND above price on big breakout days
             // when all session structure has been breached (e.g. flash crash below S3/YL).
