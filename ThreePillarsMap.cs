@@ -182,6 +182,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         private int                        overnightBars   = 0;
         private double                     dayTotalVol     = 0;
         private double                     dayProfileAvg   = 0;  // avg vol/level for confluence grading
+        private HashSet<string>            swingMarkerTags = new HashSet<string>();
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -228,6 +229,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Confluence Proximity Ticks", GroupName = "Chart Configuration", Order = 3,
             Description = "Two levels within this many ticks form a confluence zone.")]
         public int ConfluenceProximityTicks { get; set; }
+
+        [Browsable(false)]
+        public bool RoleDefaultsApplied { get; set; }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -335,10 +339,14 @@ namespace NinjaTrader.NinjaScript.Indicators
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region Parameters â€” Swing Detection
 
-        [Range(1, 10)]
+        [Range(1, 30)]
         [Display(Name = "Swing Strength", GroupName = "Swing Detection", Order = 1,
             Description = "Number of bars on each side a bar must dominate to qualify as a swing high/low. Default 3.")]
         public int SwingStrength { get; set; }
+
+        [Display(Name = "Show Swing Markers", GroupName = "Swing Detection", Order = 2,
+            Description = "Dot + short dotted line at each confirmed swing pivot, scanned on every bar (including overnight). Replaces a standalone Swing indicator.")]
+        public bool ShowSwingMarkers { get; set; }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -713,6 +721,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 // Swing
                 SwingStrength               = 3;
+                ShowSwingMarkers            = true;
+                RoleDefaultsApplied         = false;
 
                 // Visibility
                 ShowYH                      = true;
@@ -793,6 +803,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 // Detect instrument and configure session times
                 ConfigureInstrument();
+
+                if (!RoleDefaultsApplied)
+                {
+                    ApplyRoleDefaults();
+                    RoleDefaultsApplied = true;
+                }
             }
             else if (State == State.DataLoaded)
             {
@@ -808,6 +824,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 prevAbovePP        = false;
                 nakedPOCPrices.Clear();
                 nakedPOCTags.Clear();
+                swingMarkerTags.Clear();
                 ResetLevels();
             }
             else if (State == State.Terminated)
@@ -817,6 +834,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                     try { RemoveDrawObject(t); } catch { }
                 try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { }
                 foreach (string t in nakedPOCTags)
+                    try { RemoveDrawObject(t); } catch { }
+                foreach (string t in swingMarkerTags)
                     try { RemoveDrawObject(t); } catch { }
             }
         }
@@ -872,6 +891,30 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
+        // Applied once per instance (State.Configure) so saved templates keep any later manual edits.
+        private void ApplyRoleDefaults()
+        {
+            switch (ChartRole)
+            {
+                case ChartRole.FourHour:
+                    SwingStrength    = 3;
+                    break;
+                case ChartRole.OneHour:
+                    SwingStrength    = 10;
+                    break;
+                case ChartRole.FifteenMinute:
+                    SwingStrength    = 20;
+                    break;
+                case ChartRole.ThreeMinute:
+                    ShowSwingMarkers = false;
+                    break;
+                case ChartRole.OneMinute:
+                    ShowSwingMarkers = false;
+                    ProximityTicks   = 20;
+                    break;
+            }
+        }
+
         private void ResetLevels()
         {
             lvlYH  = lvlYL  = lvlYC  = 0;
@@ -894,6 +937,9 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (BarsInProgress != 0) return;
             if (CurrentBar < 20)     return;
+
+            // Runs on every bar (including overnight) so it replaces a standalone Swing indicator.
+            CheckSwingMarkers();
 
             TimeSpan barTime = Time[0].TimeOfDay;
             DateTime barDate = Time[0].Date;
@@ -1200,6 +1246,49 @@ namespace NinjaTrader.NinjaScript.Indicators
                     DrawTier(TAG_PREFIX + "CWL_" + dateTag, lvlCWL, CWLColor, DashStyleHelper.Dot, 1, "CWL", 2);
                 }
             }
+        }
+        #endregion
+
+        // =================================================================
+        #region Swing Markers
+
+        // Confirms a pivot once SwingStrength bars exist dominantly on both sides.
+        // Independent of the wall engine's lvlSwingH/lvlSwingL (top-3 confluence inputs) — 
+        // this marks every historical pivot, purely as a visual replacement for a standalone Swing indicator.
+        private void CheckSwingMarkers()
+        {
+            if (!ShowSwingMarkers) return;
+            int strength = SwingStrength;
+            if (CurrentBar < strength * 2) return;
+
+            bool isSwingH = true, isSwingL = true;
+            for (int k = 1; k <= strength; k++)
+            {
+                if (High[strength] <= High[strength - k] || High[strength] <= High[strength + k]) isSwingH = false;
+                if (Low[strength]  >= Low[strength - k]  || Low[strength]  >= Low[strength + k])  isSwingL = false;
+            }
+
+            if (isSwingH) DrawSwingMarker(true,  strength, High[strength]);
+            if (isSwingL) DrawSwingMarker(false, strength, Low[strength]);
+        }
+
+        private void DrawSwingMarker(bool isHigh, int barsAgo, double price)
+        {
+            string tag = TAG_PREFIX + (isHigh ? "SWH_" : "SWL_") + (CurrentBar - barsAgo);
+            if (swingMarkerTags.Contains(tag)) return;
+
+            Brush color   = isHigh ? Brushes.DodgerBlue : Brushes.HotPink;
+            int    leftBA  = barsAgo + 2;
+            int    rightBA = Math.Max(0, barsAgo - 2);
+            try
+            {
+                Draw.Dot(this, tag, false, barsAgo, price, color);
+                Draw.Line(this, tag + "_L", false, leftBA, price, rightBA, price,
+                    color, DashStyleHelper.Dot, 1);
+                swingMarkerTags.Add(tag);
+                swingMarkerTags.Add(tag + "_L");
+            }
+            catch (Exception ex) { Print(LOG_PREFIX + " Swing marker error: " + ex.Message); }
         }
         #endregion
 
@@ -1963,9 +2052,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (CurrentBar < 1) return;
             double cur    = Close[0];
             double thresh = ProximityTicks * TickSize;
-
-            // Special 1M threshold
-            if (ChartRole == ChartRole.OneMinute) thresh = 20 * TickSize;
 
             CheckAndActivate(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH",   cur, thresh, 3);
             CheckAndActivate(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL",   cur, thresh, 3);
