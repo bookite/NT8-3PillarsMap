@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // ThreePillarsMapHTF.cs  -  v1.0
 // NinjaTrader 8  |  Daily / Higher-Timeframe Structural Wall Map
 // ============================================================
@@ -63,7 +63,8 @@ namespace NinjaTrader.NinjaScript.Indicators
         #endregion
 
         #region Wall Engine State
-        private readonly List<string> wallTags = new List<string>();
+        private readonly List<string> wallTags      = new List<string>();
+        private List<Wall>            lastKeptWalls  = new List<Wall>();
 
         private class LevelCandidate
         {
@@ -198,6 +199,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             else if (State == State.DataLoaded)
             {
                 wallTags.Clear();
+                lastKeptWalls.Clear();
             }
             else if (State == State.Terminated)
             {
@@ -331,12 +333,13 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private List<Wall> SelectSide(List<Wall> side)
         {
-            var result = new List<Wall>();
-            result.AddRange(side.Where(WallAlwaysKeep));
-            result.AddRange(side.Where(w => !WallAlwaysKeep(w) && w.Count >= MinConfluence)
+            var always    = side.Where(WallAlwaysKeep).ToList();
+            int remaining = Math.Max(0, MaxWallsPerSide - always.Count);
+            var scored    = side.Where(w => !WallAlwaysKeep(w) && w.Count >= MinConfluence)
                                 .OrderByDescending(w => w.Score)
-                                .Take(MaxWallsPerSide));
-            return result;
+                                .Take(remaining)
+                                .ToList();
+            return always.Concat(scored).ToList();
         }
 
         private void BuildAndDrawWalls()
@@ -369,6 +372,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             keep.AddRange(SelectSide(above));
             keep.AddRange(SelectSide(below));
 
+            lastKeptWalls = keep;
             int idx = 0;
             foreach (var w in keep)
                 DrawWall(w, price, idx++);
@@ -384,10 +388,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             string tagLine = tagBand + "_C";
             string tagLbl  = tagBand + "_L";
 
-            bool hasH = w.Members.Any(m => m.Code == "H" || m.Code == "RH");
-            bool hasL = w.Members.Any(m => m.Code == "L" || m.Code == "RL");
             bool isRangeExtreme = w.Count == 1 && (w.Members[0].Code == "RH" || w.Members[0].Code == "RL");
-            string kind = hasH && hasL ? "S/R" : hasH ? "H" : "L";
+            string kind = GetKind(w);
 
             if (isWall)
             {
@@ -439,7 +441,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 int    fs    = isWall ? Math.Max(8, LabelFontSize) : Math.Max(7, LabelFontSize - 2);
                 try
                 {
-                    Draw.Text(this, tagLbl, true, text, 0, w.Center, 0,
+                    Draw.Text(this, tagLbl, true, text, -5, w.Center, 0,
                         txt, new SimpleFont("Arial", fs),
                         System.Windows.TextAlignment.Left,
                         Brushes.Transparent, WithOpacity(Brushes.Black, 0.70), 70);
@@ -447,6 +449,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
                 catch (Exception ex) { Print(LOG_PREFIX + " Wall label error: " + ex.Message); }
             }
+        }
+
+        private string GetKind(Wall w)
+        {
+            bool hasH = w.Members.Any(m => m.Code == "H" || m.Code == "RH");
+            bool hasL = w.Members.Any(m => m.Code == "L" || m.Code == "RL");
+            return hasH && hasL ? "S/R" : hasH ? "H" : "L";
         }
 
         private Brush WithOpacity(Brush brush, double opacity)
@@ -474,13 +483,31 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (!ShowLegend) { try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { } return; }
 
+            double price  = Close[0];
+            int    rCount = lastKeptWalls.Count(w => w.Center >= price);
+            int    sCount = lastKeptWalls.Count(w => w.Center <  price);
+            Wall   nR = lastKeptWalls.Where(w => w.Center >= price).OrderBy(w => w.Center).FirstOrDefault();
+            Wall   nS = lastKeptWalls.Where(w => w.Center <  price).OrderByDescending(w => w.Center).FirstOrDefault();
+            string rLine = nR != null
+                ? "  R " + FormatPrice(nR.Center) + "  [+" + FormatPrice(nR.Center - price) + " pts]  " + nR.Count + "x " + GetKind(nR)
+                : "  (no resistance visible)";
+            string sLine = nS != null
+                ? "  S " + FormatPrice(nS.Center) + "  [-" + FormatPrice(price - nS.Center) + " pts]  " + nS.Count + "x " + GetKind(nS)
+                : "  (no support visible)";
+            string dayStr = Time[0].DayOfWeek.ToString().Substring(0, 3).ToUpper() + "  " + Time[0].ToString("MMM d yyyy");
+
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("THREE PILLARS - DAILY WALLS " + VERSION);
-            sb.AppendLine("Band = price tested repeatedly; thicker = more touches");
-            sb.AppendLine("  **  2x    ***  3x    ****  4+ touches");
-            sb.AppendLine("R = resistance (above)   S = support (below)");
-            sb.AppendLine("S/R = level flipped roles (strongest)");
-            sb.AppendLine("Dotted = recent swing + range hi/lo (boundaries)");
+            sb.AppendLine("═══ DAILY STRUCTURE " + VERSION + " ══════════════");
+            sb.AppendLine("  " + dayStr);
+            sb.AppendLine("  Walls: " + rCount + "R above  ·  " + sCount + "S below");
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.AppendLine("  ↑ Nearest R:");
+            sb.AppendLine(rLine);
+            sb.AppendLine("  ↓ Nearest S:");
+            sb.AppendLine(sLine);
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.AppendLine("  **=2 touches  ***=3  ****=4+ (wall)");
+            sb.Append    ("  R/S=flip  RH/RL=range  ····=lone swing");
 
             TextPosition tp;
             switch (LegendPosition)
@@ -495,7 +522,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 Draw.TextFixed(this, TAG_PREFIX + "LEGEND", sb.ToString(), tp,
                     Brushes.White, new SimpleFont("Courier New", 11),
-                    Brushes.Gray, WithOpacity(Brushes.Black, 0.80), 85);
+                    Brushes.SteelBlue, WithOpacity(Brushes.Black, 0.85), 90);
             }
             catch (Exception ex) { Print(LOG_PREFIX + " Legend error: " + ex.Message); }
         }

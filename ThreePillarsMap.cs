@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // ThreePillarsMap.cs  â€”  v2.0
 // NinjaTrader 8  |  Multi-Timeframe Structural Wall Map
 // ============================================================
@@ -18,14 +18,12 @@
 //   ZB        (30-Year Treasury Bond)
 //   ZC        (Corn Futures)
 //
-// THREE-TIER SYSTEM:
-//   Tier 1  â€”  Thick solid/dashed lines, 100% opacity, always visible.
-//              The most important structural walls for the selected timeframe.
-//   Tier 2  â€”  Thinner lines, 70% opacity, always visible.
-//              Context walls that give price the next reference.
-//   Tier 3  â€”  1px dotted lines, 50% opacity.
-//              Hidden until price comes within ProximityTicks. Once
-//              activated they stay visible for the rest of the session.
+// VISUAL SYSTEM:
+//   Wall   - 2+ overlapping levels clustered together. Thick band + center
+//            line, opacity/thickness scales with touch count (** / *** / ****).
+//   Anchor - a single reference level shown alone (prior-day H/L/C,
+//            today's POC/VAH/VAL, key HTF refs near price). Thin dotted
+//            line - visually distinct from a confirmed multi-touch wall.
 //
 // GLOBAL DRAW OBJECTS:
 //   All levels are created as Global Draw Objects so they appear on
@@ -36,17 +34,12 @@
 //   Chart Configuration
 //     ChartRole                â€” Daily / FourHour / OneHour / FifteenMinute /
 //                                ThreeMinute / OneMinute
-//     ProximityTicks           â€” Distance (ticks) to trigger Tier 3 levels
-//     ConfluenceProximityTicks â€” Distance (ticks) to cluster into confluence zone
 //
 //   Display
 //     ShowLabels               â€” Toggle level name + price labels
 //     ShowLegend               â€” Toggle the legend key panel
 //     LegendPosition           â€” TopLeft / TopRight / BottomLeft / BottomRight
 //     LabelFontSize            â€” 6â€“16, default 9
-//     LineThicknessPrimary     â€” Tier 1 line weight (1â€“5, default 2)
-//     LineThicknessSecondary   â€” Tier 2 line weight (1â€“5, default 1)
-//     ShowConfluenceZones      â€” Draw semi-transparent confluence rectangles
 //     ShowVerificationOutput   â€” Print detailed calculations to Output window
 //
 //   Visibility Toggles
@@ -61,11 +54,24 @@
 //     ShowMonthlyLevels        â€” Prior month levels (default false)
 //     ShowSwingLevels          â€” 4H swing high/low levels
 //
+//   Structural Walls
+//     MaxWallsPerSide          â€” Confluence walls drawn above/below price (default 5)
+//     MinConfluence            â€” Min overlapping levels to count as a wall (default 2)
+//     ClusterTolerancePercent  â€” % of price within which levels merge (default 0.05)
+//     WallRangePercent         â€” % of price defining the visible wall range (default 1.5)
+//     ShowAnchors              â€” Always show prior-day H/L/C + today's POC/VAH/VAL
+//     MinRRRatio               â€” R/R threshold used by the context panel (default 1.5)
+//     ShowApproachBands        â€” Wider transparent zone around 3+/4+ touch walls
+//     ApproachBandWidth        â€” Approach zone width in ticks (default 100)
+//
 //   Volume Profile
 //     ValueAreaPercent         â€” Target % of volume in value area (50â€“90, default 70)
 //
 //   Swing Detection
-//     SwingStrength            â€” Bars each side a pivot must dominate (1â€“10, default 3)
+//     SwingStrength            â€” Bars each side a pivot must dominate (1â€“30, default 3;
+//                                role defaults auto-apply per ChartRole, see ApplyRoleDefaults)
+//     ShowSwingMarkers         â€” Dot + dotted line at every confirmed swing pivot
+//                                (all bars, including overnight). Off by default on 3M/1M.
 //
 //   Manual 4H Swing Levels    â€” Enter manually from your 4H chart if desired.
 //                                Value 0 = not drawn.
@@ -127,7 +133,6 @@ namespace NinjaTrader.NinjaScript.Indicators
     [CategoryOrder("Colors â€” Weekly Levels",   11)]
     [CategoryOrder("Colors â€” Monthly Levels",  12)]
     [CategoryOrder("Colors â€” Swing Levels",    13)]
-    [CategoryOrder("Colors â€” Confluence",      14)]
     [CategoryOrder("Manual 4H Swing Levels",   15)]
     public class ThreePillarsMap : Indicator
     {
@@ -175,19 +180,25 @@ namespace NinjaTrader.NinjaScript.Indicators
         private bool                       orComplete      = false;
         private Dictionary<double, double> dayProfile      = new Dictionary<double, double>();
         private Dictionary<double, double> weekProfile     = new Dictionary<double, double>();
-        private HashSet<string>            tier3Activated  = new HashSet<string>();
         private List<string>               drawnTags       = new List<string>();
         private DateTime                   priorRTHDate    = DateTime.MinValue;
         private int                        priorDayBars    = 0;
         private int                        overnightBars   = 0;
         private double                     dayTotalVol     = 0;
         private double                     dayProfileAvg   = 0;  // avg vol/level for confluence grading
+        private HashSet<string>            swingMarkerTags = new HashSet<string>();
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region Wall Engine State
         private readonly List<string> wallTags           = new List<string>();
         private double                lastWallBuildPrice = 0;
+        private List<Wall>            lastKeptWalls      = new List<Wall>();
+        private double                sesHi              = 0;
+        private double                sesLo              = 0;
+        private bool                         prevAbovePP    = false;
+        private List<double>                 nakedPOCPrices = new List<double>();
+        private HashSet<string>              nakedPOCTags   = new HashSet<string>();
 
         private class LevelCandidate
         {
@@ -213,15 +224,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             Description = "Select the timeframe role for this chart. Controls which levels are drawn and at which tier.")]
         public ChartRole ChartRole { get; set; }
 
-        [Range(10, 100)]
-        [Display(Name = "Proximity Ticks (Tier 3)", GroupName = "Chart Configuration", Order = 2,
-            Description = "Price must be within this many ticks to activate a Tier 3 level.")]
-        public int ProximityTicks { get; set; }
-
-        [Range(1, 100)]
-        [Display(Name = "Confluence Proximity Ticks", GroupName = "Chart Configuration", Order = 3,
-            Description = "Two levels within this many ticks form a confluence zone.")]
-        public int ConfluenceProximityTicks { get; set; }
+        [Browsable(false)]
+        public bool RoleDefaultsApplied { get; set; }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -240,20 +244,16 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Label Font Size", GroupName = "Display", Order = 4)]
         public int LabelFontSize { get; set; }
 
-        [Range(1, 5)]
-        [Display(Name = "Tier 1 Line Thickness", GroupName = "Display", Order = 5)]
-        public int LineThicknessPrimary { get; set; }
-
-        [Range(1, 5)]
-        [Display(Name = "Tier 2 Line Thickness", GroupName = "Display", Order = 6)]
-        public int LineThicknessSecondary { get; set; }
-
-        [Display(Name = "Show Confluence Zones", GroupName = "Display", Order = 7)]
-        public bool ShowConfluenceZones { get; set; }
-
         [Display(Name = "Show Verification Output", GroupName = "Display", Order = 8,
             Description = "Print all calculated level values to the Output window each session.")]
         public bool ShowVerificationOutput { get; set; }
+
+        [Display(Name = "Alert On Bias Flip", GroupName = "Display", Order = 9,
+            Description = "Audible alert + vertical line when price crosses PP.")]
+        public bool AlertOnBiasFlip { get; set; }
+
+        [Display(Name = "Show Bias Flip Line", GroupName = "Display", Order = 10)]
+        public bool ShowBiasFlipLine { get; set; }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -283,6 +283,20 @@ namespace NinjaTrader.NinjaScript.Indicators
             Description = "Always show prior-day H/L/C and today's POC/VAH/VAL even when not in a wall.")]
         public bool ShowAnchors { get; set; }
 
+        [Range(0.5, 5.0)]
+        [Display(Name = "Min R/R Ratio", GroupName = "Structural Walls", Order = 9,
+            Description = "R/R ratio in context panel. Check>=ratio, ~>=70%, X=below.")]
+        public double MinRRRatio { get; set; }
+
+        [Display(Name = "Show Approach Bands", GroupName = "Structural Walls", Order = 10,
+            Description = "Wider transparent zone around *** and **** walls.")]
+        public bool ShowApproachBands { get; set; }
+
+        [Range(10, 500)]
+        [Display(Name = "Approach Band Width (ticks)", GroupName = "Structural Walls", Order = 11,
+            Description = "Approach zone width beyond wall edge in ticks.")]
+        public int ApproachBandWidth { get; set; }
+
         [XmlIgnore]
         [Display(Name = "Resistance Wall Color", GroupName = "Structural Walls", Order = 6)]
         public Brush ResistanceColor { get; set; }
@@ -308,10 +322,14 @@ namespace NinjaTrader.NinjaScript.Indicators
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region Parameters â€” Swing Detection
 
-        [Range(1, 10)]
+        [Range(1, 30)]
         [Display(Name = "Swing Strength", GroupName = "Swing Detection", Order = 1,
             Description = "Number of bars on each side a bar must dominate to qualify as a swing high/low. Default 3.")]
         public int SwingStrength { get; set; }
+
+        [Display(Name = "Show Swing Markers", GroupName = "Swing Detection", Order = 2,
+            Description = "Dot + short dotted line at each confirmed swing pivot, scanned on every bar (including overnight). Replaces a standalone Swing indicator.")]
+        public bool ShowSwingMarkers { get; set; }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -367,6 +385,23 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Value Area %", GroupName = "Volume Profile", Order = 1,
             Description = "Percentage of total volume to include in the value area. Default 70.")]
         public double ValueAreaPercent { get; set; }
+
+        [Display(Name = "Show Naked POCs", GroupName = "Volume Profile", Order = 2,
+            Description = "Dashed magenta lines at prior session POCs not yet visited.")]
+        public bool ShowNakedPOC { get; set; }
+
+        [Range(1, 20)]
+        [Display(Name = "Naked POC Lookback (days)", GroupName = "Volume Profile", Order = 3)]
+        public int NakedPOCLookback { get; set; }
+
+        [Range(1, 100)]
+        [Display(Name = "Naked POC Visit Threshold (ticks)", GroupName = "Volume Profile", Order = 4,
+            Description = "Ticks from a naked POC to count as visited.")]
+        public int NakedPOCVisitThreshold { get; set; }
+
+        [Display(Name = "Show HVOL Bands", GroupName = "Volume Profile", Order = 5,
+            Description = "Shade high-volume zones as bands instead of HVOL text label.")]
+        public bool ShowHVOLBands { get; set; }
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -598,17 +633,6 @@ namespace NinjaTrader.NinjaScript.Indicators
         #endregion
 
         // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        #region Parameters â€” Colors: Confluence
-
-        [XmlIgnore]
-        [Display(Name = "Confluence Zone Color", GroupName = "Colors â€” Confluence", Order = 1)]
-        public Brush ConfluenceZoneColor { get; set; }
-        [Browsable(false)]
-        public string ConfluenceZoneColorSerializable
-        { get { return Serialize.BrushToString(ConfluenceZoneColor); } set { ConfluenceZoneColor = Serialize.StringToBrush(value); } }
-        #endregion
-
-        // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         #region Parameters â€” Manual 4H Swing Levels
 
         [Display(Name = "4H Swing High 1", GroupName = "Manual 4H Swing Levels", Order = 1,
@@ -647,17 +671,12 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 // Chart configuration
                 ChartRole                   = ChartRole.FifteenMinute;
-                ProximityTicks              = 40;
-                ConfluenceProximityTicks    = 8;
 
                 // Display
                 ShowLabels                  = true;
                 ShowLegend                  = true;
                 LegendPosition              = TPMLegendPosition.TopLeft;
                 LabelFontSize               = 9;
-                LineThicknessPrimary        = 2;
-                LineThicknessSecondary      = 1;
-                ShowConfluenceZones         = true;
                 ShowVerificationOutput      = false;
 
                 // Structural Walls
@@ -669,6 +688,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 // Swing
                 SwingStrength               = 3;
+                ShowSwingMarkers            = true;
+                RoleDefaultsApplied         = false;
 
                 // Visibility
                 ShowYH                      = true;
@@ -729,17 +750,30 @@ namespace NinjaTrader.NinjaScript.Indicators
                 // Swings
                 SwingHighColor              = Brushes.DeepSkyBlue;
                 SwingLowColor               = Brushes.HotPink;
-                // Confluence
-                ConfluenceZoneColor         = Brushes.Yellow;
                 // Structural Walls
                 ResistanceColor             = Brushes.Crimson;
                 SupportColor                = Brushes.LimeGreen;
                 AnchorColor                 = Brushes.Silver;
+                MinRRRatio                  = 1.5;
+                ShowApproachBands           = true;
+                ApproachBandWidth           = 100;
+                AlertOnBiasFlip             = true;
+                ShowBiasFlipLine            = true;
+                ShowNakedPOC                = true;
+                NakedPOCLookback            = 5;
+                NakedPOCVisitThreshold      = 10;
+                ShowHVOLBands               = true;
             }
             else if (State == State.Configure)
             {
                 // Detect instrument and configure session times
                 ConfigureInstrument();
+
+                if (!RoleDefaultsApplied)
+                {
+                    ApplyRoleDefaults();
+                    RoleDefaultsApplied = true;
+                }
             }
             else if (State == State.DataLoaded)
             {
@@ -748,10 +782,13 @@ namespace NinjaTrader.NinjaScript.Indicators
                 orComplete     = false;
                 dayProfile     = new Dictionary<double, double>();
                 weekProfile    = new Dictionary<double, double>();
-                tier3Activated = new HashSet<string>();
                 drawnTags      = new List<string>();
                 wallTags.Clear();
                 lastWallBuildPrice = 0;
+                prevAbovePP        = false;
+                nakedPOCPrices.Clear();
+                nakedPOCTags.Clear();
+                swingMarkerTags.Clear();
                 ResetLevels();
             }
             else if (State == State.Terminated)
@@ -760,6 +797,10 @@ namespace NinjaTrader.NinjaScript.Indicators
                 foreach (string t in drawnTags)
                     try { RemoveDrawObject(t); } catch { }
                 try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { }
+                foreach (string t in nakedPOCTags)
+                    try { RemoveDrawObject(t); } catch { }
+                foreach (string t in swingMarkerTags)
+                    try { RemoveDrawObject(t); } catch { }
             }
         }
 
@@ -814,6 +855,27 @@ namespace NinjaTrader.NinjaScript.Indicators
             }
         }
 
+        // Applied once per instance (State.Configure) so saved templates keep any later manual edits.
+        private void ApplyRoleDefaults()
+        {
+            switch (ChartRole)
+            {
+                case ChartRole.FourHour:
+                    SwingStrength    = 3;
+                    break;
+                case ChartRole.OneHour:
+                    SwingStrength    = 10;
+                    break;
+                case ChartRole.FifteenMinute:
+                    SwingStrength    = 20;
+                    break;
+                case ChartRole.ThreeMinute:
+                case ChartRole.OneMinute:
+                    ShowSwingMarkers = false;
+                    break;
+            }
+        }
+
         private void ResetLevels()
         {
             lvlYH  = lvlYL  = lvlYC  = 0;
@@ -837,6 +899,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (BarsInProgress != 0) return;
             if (CurrentBar < 20)     return;
 
+            // Runs on every bar (including overnight) so it replaces a standalone Swing indicator.
+            CheckSwingMarkers();
+
             TimeSpan barTime = Time[0].TimeOfDay;
             DateTime barDate = Time[0].Date;
 
@@ -851,9 +916,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 
                 // Clear any stale draw objects from a prior run of today's session
                 ClearTagsForDate(dateTag);
-                tier3Activated.Clear();
 
                 // Reset dynamic OR state
+                sesHi      = 0;
+                sesLo      = 0;
                 orComplete = false;
                 lvlORH     = 0;
                 lvlORL     = 0;
@@ -868,9 +934,19 @@ namespace NinjaTrader.NinjaScript.Indicators
                     try { PrintVerificationOutput(barDate); }
                     catch (Exception ex) { Print(LOG_PREFIX + " ERROR in PrintVerificationOutput: " + ex.Message); }
 
+                // Seed session extremes before drawing so slow timeframes
+                // (4H OnBarClose) show correct values on the first draw
+                if (High[0] > sesHi) sesHi = High[0];
+                if (sesLo == 0 || Low[0] < sesLo) sesLo = Low[0];
+                if (lvlPP > 0) prevAbovePP = Close[0] >= lvlPP;
+                CalcNakedPOCs(barDate);
                 BuildAndDrawWalls();
-                DrawLegend();
             }
+
+            // Track today's RTH session extremes for the context panel
+            if (High[0] > sesHi) sesHi = High[0];
+            if (sesLo == 0 || Low[0] < sesLo) sesLo = Low[0];
+            UpdateCurrentWeekExtremes();
 
             // â”€â”€ Rebuild walls when price drifts, so R/S sides stay correct as price moves â”€â”€
             if (lastWallBuildPrice > 0
@@ -878,6 +954,30 @@ namespace NinjaTrader.NinjaScript.Indicators
                 BuildAndDrawWalls();
 
             // â”€â”€ OPENING RANGE TRACKING â”€â”€
+            // Bias flip detection (improvement 8)
+            if (AlertOnBiasFlip && lvlPP > 0)
+            {
+                bool abovePP = Close[0] >= lvlPP;
+                if (abovePP != prevAbovePP)
+                {
+                    Alert("BiasFlip", Priority.High,
+                        "BIAS FLIP: " + (abovePP ? "ABOVE PP " : "BELOW PP ") + FormatPrice(lvlPP),
+                        "Alert2.wav", 60, Brushes.Yellow, Brushes.Black);
+                    if (ShowBiasFlipLine)
+                    {
+                        string flipTag = TAG_PREFIX + "FLIP_" + CurrentBar;
+                        try
+                        {
+                            Draw.VerticalLine(this, flipTag, 0,
+                                abovePP ? Brushes.Cyan : Brushes.OrangeRed, DashStyleHelper.Dash, 2);
+                            if (!drawnTags.Contains(flipTag)) drawnTags.Add(flipTag);
+                        }
+                        catch { }
+                    }
+                }
+                prevAbovePP = abovePP;
+            }
+
             if (instrumentHasOR && !orComplete)
             {
                 if (barTime >= orStart && barTime < orEnd)
@@ -1079,14 +1179,23 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             for (int i = strength; i < limit && (swHCount < 3 || swLCount < 3); i++)
             {
-                bool isSwingH = true, isSwingL = true;
-                for (int k = 1; k <= strength; k++)
-                {
-                    if (High[i] <= High[i - k] || High[i] <= High[i + k]) isSwingH = false;
-                    if (Low[i]  >= Low[i - k]  || Low[i]  >= Low[i + k])  isSwingL = false;
-                }
+                bool isSwingH, isSwingL;
+                IsSwingPivot(i, strength, out isSwingH, out isSwingL);
                 if (isSwingH && swHCount < 3) { lvlSwingH[swHCount++] = High[i]; }
                 if (isSwingL && swLCount < 3) { lvlSwingL[swLCount++] = Low[i];  }
+            }
+        }
+
+        // A bar at barsAgo qualifies as a swing high/low if it dominates `strength`
+        // bars on each side. Shared by CalcSwingLevels (top-3 confluence input) and
+        // CheckSwingMarkers (every-pivot visual marker) - same test, different callers.
+        private void IsSwingPivot(int barsAgo, int strength, out bool isHigh, out bool isLow)
+        {
+            isHigh = true; isLow = true;
+            for (int k = 1; k <= strength; k++)
+            {
+                if (High[barsAgo] <= High[barsAgo - k] || High[barsAgo] <= High[barsAgo + k]) isHigh = false;
+                if (Low[barsAgo]  >= Low[barsAgo - k]  || Low[barsAgo]  >= Low[barsAgo + k])  isLow = false;
             }
         }
 
@@ -1107,6 +1216,45 @@ namespace NinjaTrader.NinjaScript.Indicators
                     DrawTier(TAG_PREFIX + "CWL_" + dateTag, lvlCWL, CWLColor, DashStyleHelper.Dot, 1, "CWL", 2);
                 }
             }
+        }
+        #endregion
+
+        // =================================================================
+        #region Swing Markers
+
+        // Confirms a pivot once SwingStrength bars exist dominantly on both sides.
+        // Independent of the wall engine's lvlSwingH/lvlSwingL (top-3 confluence inputs) — 
+        // this marks every historical pivot, purely as a visual replacement for a standalone Swing indicator.
+        private void CheckSwingMarkers()
+        {
+            if (!ShowSwingMarkers) return;
+            int strength = SwingStrength;
+            if (CurrentBar < strength * 2) return;
+
+            bool isSwingH, isSwingL;
+            IsSwingPivot(strength, strength, out isSwingH, out isSwingL);
+
+            if (isSwingH) DrawSwingMarker(true,  strength, High[strength]);
+            if (isSwingL) DrawSwingMarker(false, strength, Low[strength]);
+        }
+
+        private void DrawSwingMarker(bool isHigh, int barsAgo, double price)
+        {
+            string tag = TAG_PREFIX + (isHigh ? "SWH_" : "SWL_") + (CurrentBar - barsAgo);
+            if (swingMarkerTags.Contains(tag)) return;
+
+            Brush color   = isHigh ? Brushes.DodgerBlue : Brushes.HotPink;
+            int    leftBA  = barsAgo + 2;
+            int    rightBA = Math.Max(0, barsAgo - 2);
+            try
+            {
+                Draw.Dot(this, tag, false, barsAgo, price, color);
+                Draw.Line(this, tag + "_L", false, leftBA, price, rightBA, price,
+                    color, DashStyleHelper.Dot, 1);
+                swingMarkerTags.Add(tag);
+                swingMarkerTags.Add(tag + "_L");
+            }
+            catch (Exception ex) { Print(LOG_PREFIX + " Swing marker error: " + ex.Message); }
         }
         #endregion
 
@@ -1162,276 +1310,20 @@ namespace NinjaTrader.NinjaScript.Indicators
                 { vaVol += dnVol; val = sorted[dnIdx]; dnIdx--; }
             }
         }
-        #endregion
 
-        // =================================================================
-        #region Draw Levels For Role
-
-        private void DrawLevelsForRole()
+        private double GetZoneVolume(double low, double high)
         {
-            switch (ChartRole)
-            {
-                case ChartRole.Daily:         DrawDaily();         break;
-                case ChartRole.FourHour:      DrawFourHour();      break;
-                case ChartRole.OneHour:       DrawOneHour();       break;
-                case ChartRole.FifteenMinute: DrawFifteenMinute(); break;
-                case ChartRole.ThreeMinute:   DrawThreeMinute();   break;
-                case ChartRole.OneMinute:     DrawOneMinute();     break;
-            }
-        }
-
-        // â”€â”€ Daily Chart â”€â”€
-        private void DrawDaily()
-        {
-            // Tier 1: PMH, PML, PWH, PWL
-            if (ShowMonthlyLevels)
-            {
-                DrawT1(TAG_PREFIX + "PMH_" + dateTag, lvlPMH, PMHColor, DashStyleHelper.Solid, "PMH");
-                DrawT1(TAG_PREFIX + "PML_" + dateTag, lvlPML, PMLColor, DashStyleHelper.Solid, "PML");
-            }
-            if (ShowWeeklyLevels)
-            {
-                DrawT1(TAG_PREFIX + "PWH_" + dateTag, lvlPWH, PWHColor, DashStyleHelper.Solid, "PWH");
-                DrawT1(TAG_PREFIX + "PWL_" + dateTag, lvlPWL, PWLColor, DashStyleHelper.Solid, "PWL");
-                // Tier 2: week POC, VAH, VAL, CWH, CWL
-                DrawT2(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC, WeeklyPOCColor, DashStyleHelper.Solid,  "WPOC");
-                DrawT2(TAG_PREFIX + "WVAH_" + dateTag, lvlWeekVAH, WeeklyVAHColor, DashStyleHelper.Solid,  "WVAH");
-                DrawT2(TAG_PREFIX + "WVAL_" + dateTag, lvlWeekVAL, WeeklyVALColor, DashStyleHelper.Solid,  "WVAL");
-                DrawT2(TAG_PREFIX + "CWH_"  + dateTag, lvlCWH,     CWHColor,       DashStyleHelper.Dot,    "CWH");
-                DrawT2(TAG_PREFIX + "CWL_"  + dateTag, lvlCWL,     CWLColor,       DashStyleHelper.Dot,    "CWL");
-            }
-        }
-
-        // â”€â”€ 4H Chart â”€â”€
-        private void DrawFourHour()
-        {
-            if (ShowWeeklyLevels)
-            {
-                DrawT1(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH,    PWHColor,     DashStyleHelper.Solid, "PWH");
-                DrawT1(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL,    PWLColor,     DashStyleHelper.Solid, "PWL");
-                DrawT1(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC,WeeklyPOCColor,DashStyleHelper.Solid,"WPOC");
-                DrawT2(TAG_PREFIX + "WVAH_" + dateTag, lvlWeekVAH,WeeklyVAHColor,DashStyleHelper.Solid,"WVAH");
-                DrawT2(TAG_PREFIX + "WVAL_" + dateTag, lvlWeekVAL,WeeklyVALColor,DashStyleHelper.Solid,"WVAL");
-            }
-            if (ShowYH) DrawT2(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
-            if (ShowYL) DrawT2(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL");
-            if (ShowPOC) DrawT2(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, DashStyleHelper.Solid,"POC");
-            if (ShowSwingLevels)
-            {
-                for (int k = 0; k < 3; k++)
-                {
-                    if (lvlSwingH[k] > 0) DrawT2(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, DashStyleHelper.Dash, "SH" + (k+1));
-                    if (lvlSwingL[k] > 0) DrawT2(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  DashStyleHelper.Dash, "SL" + (k+1));
-                }
-            }
-            // Tier 3
-            if (ShowMonthlyLevels)
-            {
-                DrawT3(TAG_PREFIX + "PMH_" + dateTag, lvlPMH, PMHColor, "PMH");
-                DrawT3(TAG_PREFIX + "PML_" + dateTag, lvlPML, PMLColor, "PML");
-            }
-        }
-
-        // â”€â”€ 1H Chart â”€â”€
-        private void DrawOneHour()
-        {
-            if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
-            if (ShowYL) DrawT1(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL");
-            if (ShowPOC) DrawT1(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, DashStyleHelper.Solid,"POC");
-            if (ShowPivots)
-            {
-                DrawT1(TAG_PREFIX + "PP_"  + dateTag, lvlPP, PPColor, DashStyleHelper.Dash, "PP");
-                DrawT2(TAG_PREFIX + "R1_"  + dateTag, lvlR1, R1Color, DashStyleHelper.Dash, "R1");
-                DrawT2(TAG_PREFIX + "S1_"  + dateTag, lvlS1, S1Color, DashStyleHelper.Dash, "S1");
-            }
-            if (ShowONH)
-            {
-                int ow = lvlONH > lvlYH ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONH_" + dateTag, lvlONH, ONHColor, DashStyleHelper.Dot, ow, "ONH", lvlONH > lvlYH ? 1 : 2);
-            }
-            if (ShowONL)
-            {
-                int ow = lvlONL < lvlYL ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONL_" + dateTag, lvlONL, ONLColor, DashStyleHelper.Dot, ow, "ONL", lvlONL < lvlYL ? 1 : 2);
-            }
-            if (ShowVAH) DrawT2(TAG_PREFIX + "VAH_" + dateTag, lvlVAH, VAHColor, DashStyleHelper.Solid, "VAH");
-            if (ShowVAL) DrawT2(TAG_PREFIX + "VAL_" + dateTag, lvlVAL, VALColor, DashStyleHelper.Solid, "VAL");
-            // Tier 3
-            if (ShowR2S2)
-            {
-                DrawT3(TAG_PREFIX + "R2_" + dateTag, lvlR2, R2Color, "R2");
-                DrawT3(TAG_PREFIX + "S2_" + dateTag, lvlS2, S2Color, "S2");
-            }
-            if (ShowR3S3)
-            {
-                DrawT3(TAG_PREFIX + "R3_" + dateTag, lvlR3, R3Color, "R3");
-                DrawT3(TAG_PREFIX + "S3_" + dateTag, lvlS3, S3Color, "S3");
-            }
-            if (ShowWeeklyLevels)
-            {
-                DrawT3(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH,     PWHColor,     "PWH");
-                DrawT3(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL,     PWLColor,     "PWL");
-                DrawT3(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC, WeeklyPOCColor,"WPOC");
-            }
-            if (ShowSwingLevels)
-                for (int k = 0; k < 3; k++)
-                {
-                    if (lvlSwingH[k] > 0) DrawT3(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, "SH" + (k+1));
-                    if (lvlSwingL[k] > 0) DrawT3(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  "SL" + (k+1));
-                }
-        }
-
-        // â”€â”€ 15M Chart â”€â”€
-        private void DrawFifteenMinute()
-        {
-            if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
-            if (ShowYL) DrawT1(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL");
-            if (ShowPOC) DrawT1(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, DashStyleHelper.Solid,"POC");
-            if (ShowPivots)
-            {
-                DrawT1(TAG_PREFIX + "PP_"  + dateTag, lvlPP, PPColor, DashStyleHelper.Dash, "PP");
-                DrawT2(TAG_PREFIX + "R1_"  + dateTag, lvlR1, R1Color, DashStyleHelper.Dash, "R1");
-                DrawT2(TAG_PREFIX + "S1_"  + dateTag, lvlS1, S1Color, DashStyleHelper.Dash, "S1");
-            }
-            if (ShowONH)
-            {
-                int ow = lvlONH > lvlYH ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONH_" + dateTag, lvlONH, ONHColor, DashStyleHelper.Dot, ow, "ONH", lvlONH > lvlYH ? 1 : 2);
-            }
-            if (ShowONL)
-            {
-                int ow = lvlONL < lvlYL ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONL_" + dateTag, lvlONL, ONLColor, DashStyleHelper.Dot, ow, "ONL", lvlONL < lvlYL ? 1 : 2);
-            }
-            if (ShowVAH) DrawT2(TAG_PREFIX + "VAH_" + dateTag, lvlVAH, VAHColor, DashStyleHelper.Solid, "VAH");
-            if (ShowVAL) DrawT2(TAG_PREFIX + "VAL_" + dateTag, lvlVAL, VALColor, DashStyleHelper.Solid, "VAL");
-            // OR drawn by DrawOpeningRangeLevels() after 9:45
-            // Tier 3
-            if (ShowR2S2)
-            {
-                DrawT3(TAG_PREFIX + "R2_" + dateTag, lvlR2, R2Color, "R2");
-                DrawT3(TAG_PREFIX + "S2_" + dateTag, lvlS2, S2Color, "S2");
-            }
-            if (ShowR3S3)
-            {
-                DrawT3(TAG_PREFIX + "R3_" + dateTag, lvlR3, R3Color, "R3");
-                DrawT3(TAG_PREFIX + "S3_" + dateTag, lvlS3, S3Color, "S3");
-            }
-            if (ShowWeeklyLevels)
-            {
-                DrawT3(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH,     PWHColor,      "PWH");
-                DrawT3(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL,     PWLColor,      "PWL");
-                DrawT3(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC, WeeklyPOCColor,"WPOC");
-            }
-            if (ShowSwingLevels)
-                for (int k = 0; k < 3; k++)
-                {
-                    if (lvlSwingH[k] > 0) DrawT3(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, "SH" + (k+1));
-                    if (lvlSwingL[k] > 0) DrawT3(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  "SL" + (k+1));
-                }
-        }
-
-        // â”€â”€ 3M Chart â”€â”€
-        private void DrawThreeMinute()
-        {
-            if (ShowYH) DrawT1(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH");
-            if (ShowYL) DrawT1(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL");
-            if (ShowPOC) DrawT1(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, DashStyleHelper.Solid,"POC");
-            if (ShowPivots) DrawT1(TAG_PREFIX + "PP_"   + dateTag, lvlPP, PPColor, DashStyleHelper.Dash, "PP");
-            // OR added after 9:45 via DrawOpeningRangeLevels()
-            if (ShowPivots)
-            {
-                DrawT2(TAG_PREFIX + "R1_"  + dateTag, lvlR1, R1Color, DashStyleHelper.Dash, "R1");
-                DrawT2(TAG_PREFIX + "S1_"  + dateTag, lvlS1, S1Color, DashStyleHelper.Dash, "S1");
-            }
-            if (ShowONH)
-            {
-                int ow = lvlONH > lvlYH ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONH_" + dateTag, lvlONH, ONHColor, DashStyleHelper.Dot, ow, "ONH", lvlONH > lvlYH ? 1 : 2);
-            }
-            if (ShowONL)
-            {
-                int ow = lvlONL < lvlYL ? LineThicknessPrimary : LineThicknessSecondary;
-                DrawTier(TAG_PREFIX + "ONL_" + dateTag, lvlONL, ONLColor, DashStyleHelper.Dot, ow, "ONL", lvlONL < lvlYL ? 1 : 2);
-            }
-            // Tier 3
-            if (ShowR2S2)
-            {
-                DrawT3(TAG_PREFIX + "R2_" + dateTag, lvlR2, R2Color, "R2");
-                DrawT3(TAG_PREFIX + "S2_" + dateTag, lvlS2, S2Color, "S2");
-            }
-            if (ShowR3S3)
-            {
-                DrawT3(TAG_PREFIX + "R3_" + dateTag, lvlR3, R3Color, "R3");
-                DrawT3(TAG_PREFIX + "S3_" + dateTag, lvlS3, S3Color, "S3");
-            }
-            if (ShowWeeklyLevels)
-            {
-                DrawT3(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH,     PWHColor,      "PWH");
-                DrawT3(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL,     PWLColor,      "PWL");
-                DrawT3(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC, WeeklyPOCColor,"WPOC");
-            }
-            if (ShowVAH) DrawT3(TAG_PREFIX + "VAH_" + dateTag, lvlVAH, VAHColor, "VAH");
-            if (ShowVAL) DrawT3(TAG_PREFIX + "VAL_" + dateTag, lvlVAL, VALColor, "VAL");
-            if (ShowSwingLevels)
-                for (int k = 0; k < 3; k++)
-                {
-                    if (lvlSwingH[k] > 0) DrawT3(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, "SH" + (k+1));
-                    if (lvlSwingL[k] > 0) DrawT3(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  "SL" + (k+1));
-                }
-        }
-
-        // â”€â”€ 1M Chart â”€â”€
-        private void DrawOneMinute()
-        {
-            // Tier 1: PP only
-            if (ShowPivots) DrawT1(TAG_PREFIX + "PP_" + dateTag, lvlPP, PPColor, DashStyleHelper.Dash, "PP");
-
-            // Everything else is Tier 3 with tight threshold
-            if (ShowYH)    DrawT3(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  "YH");
-            if (ShowYL)    DrawT3(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  "YL");
-            if (ShowPOC)   DrawT3(TAG_PREFIX + "POC_"  + dateTag, lvlPOC, POCColor, "POC");
-            if (ShowONH)   DrawT3(TAG_PREFIX + "ONH_"  + dateTag, lvlONH, ONHColor, "ONH");
-            if (ShowONL)   DrawT3(TAG_PREFIX + "ONL_"  + dateTag, lvlONL, ONLColor, "ONL");
-            if (ShowPivots)
-            {
-                DrawT3(TAG_PREFIX + "R1_" + dateTag, lvlR1, R1Color, "R1");
-                DrawT3(TAG_PREFIX + "S1_" + dateTag, lvlS1, S1Color, "S1");
-            }
-        }
-
-        // â”€â”€ Opening Range (called after 9:45 AM) â”€â”€
-        private void DrawOpeningRangeLevels()
-        {
-            if (!instrumentHasOR || !ShowOR) return;
-            if (lvlORH == 0 || lvlORL == 0) return;
-
-            // OR is Tier 1 on 3M, Tier 2 on 15M
-            if (ChartRole == ChartRole.ThreeMinute || ChartRole == ChartRole.OneMinute)
-            {
-                DrawT1(TAG_PREFIX + "ORH_" + dateTag, lvlORH, ORHighColor, DashStyleHelper.Dash, "ORH");
-                DrawT1(TAG_PREFIX + "ORL_" + dateTag, lvlORL, ORLowColor,  DashStyleHelper.Dash, "ORL");
-            }
-            else if (ChartRole == ChartRole.FifteenMinute || ChartRole == ChartRole.OneHour)
-            {
-                DrawT2(TAG_PREFIX + "ORH_" + dateTag, lvlORH, ORHighColor, DashStyleHelper.Dash, "ORH");
-                DrawT2(TAG_PREFIX + "ORL_" + dateTag, lvlORL, ORLowColor,  DashStyleHelper.Dash, "ORL");
-            }
+            if (dayProfile.Count == 0) return 0;
+            double vol = 0;
+            foreach (var kv in dayProfile)
+                if (kv.Key >= low - TickSize * 0.01 && kv.Key <= high + TickSize * 0.01)
+                    vol += kv.Value;
+            return vol;
         }
         #endregion
 
         // =================================================================
         #region Drawing Primitives
-
-        // Tier-specific draw helpers
-        private void DrawT1(string tag, double price, Brush color, DashStyleHelper dash, string lbl)
-            => DrawTier(tag, price, color, dash, LineThicknessPrimary, lbl, 1);
-
-        private void DrawT2(string tag, double price, Brush color, DashStyleHelper dash, string lbl)
-            => DrawTier(tag, price, color, dash, LineThicknessSecondary, lbl, 2);
-
-        private void DrawT3(string tag, double price, Brush color, string lbl)
-            => DrawTier(tag, price, color, DashStyleHelper.Dot, 1, lbl, 3);
 
         // Core draw method
         private void DrawTier(string tag, double price, Brush color, DashStyleHelper dash,
@@ -1441,13 +1333,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             Brush lineColor  = tier == 1 ? color : WithOpacity(color, tier == 2 ? 0.70 : 0.50);
             Brush labelColor = lineColor;
-
-            // For Tier 3 â€” initially hidden; drawn only when proximity-activated
-            if (tier == 3)
-            {
-                if (!tier3Activated.Contains(tag))
-                    return; // will be drawn by CheckProximityActivation()
-            }
 
             try
             {
@@ -1529,41 +1414,73 @@ namespace NinjaTrader.NinjaScript.Indicators
             void Add(double p, string code, double w, bool anchor, bool key)
             { if (p > 0) c.Add(new LevelCandidate { Price = p, Code = code, Weight = w, IsAnchor = anchor, IsKey = key }); }
 
-            // Anchors â€” prior-day refs, always shown
-            Add(lvlYH,  "YH",  2.5, true,  false);
-            Add(lvlYL,  "YL",  2.5, true,  false);
+            // Anchors â€” prior-day refs, always shown (YC has no toggle, always on)
+            if (ShowYH)  Add(lvlYH,  "YH",  2.5, true,  false);
+            if (ShowYL)  Add(lvlYL,  "YL",  2.5, true,  false);
             Add(lvlYC,  "YC",  1.5, true,  false);
-            Add(lvlPOC, "POC", 3.0, true,  false);
-            Add(lvlVAH, "VAH", 2.0, true,  false);
-            Add(lvlVAL, "VAL", 2.0, true,  false);
+            if (ShowPOC) Add(lvlPOC, "POC", 3.0, true,  false);
+            if (ShowVAH) Add(lvlVAH, "VAH", 2.0, true,  false);
+            if (ShowVAL) Add(lvlVAL, "VAL", 2.0, true,  false);
 
             // Overnight
-            Add(lvlONH, "ONH", 1.5, false, false);
-            Add(lvlONL, "ONL", 1.5, false, false);
+            if (ShowONH) Add(lvlONH, "ONH", 1.5, false, false);
+            if (ShowONL) Add(lvlONL, "ONL", 1.5, false, false);
             // Pivots
-            Add(lvlPP, "PP", 1.5, false, false);
-            Add(lvlR1, "R1", 1.2, false, false);
-            Add(lvlS1, "S1", 1.2, false, false);
-            Add(lvlR2, "R2", 1.0, false, false);
-            Add(lvlS2, "S2", 1.0, false, false);
-            Add(lvlR3, "R3", 0.8, false, false);
-            Add(lvlS3, "S3", 0.8, false, false);
-            // Weekly â€” PWH/PWL/WPOC are key (show lone when near price)
-            Add(lvlPWH,     "PWH",  2.5, false, true);
-            Add(lvlPWL,     "PWL",  2.5, false, true);
-            Add(lvlWeekPOC, "WPOC", 2.5, false, true);
-            Add(lvlWeekVAH, "WVAH", 2.0, false, false);
-            Add(lvlWeekVAL, "WVAL", 2.0, false, false);
-            // Monthly â€” key
-            Add(lvlPMH, "PMH", 2.0, false, true);
-            Add(lvlPML, "PML", 2.0, false, true);
-            // Opening range (once complete)
-            if (orComplete) { Add(lvlORH, "ORH", 1.2, false, false); Add(lvlORL, "ORL", 1.2, false, false); }
-            // 4H swings
-            for (int k = 0; k < 3; k++)
+            if (ShowPivots)
             {
-                Add(lvlSwingH[k], "SH", 1.5, false, false);
-                Add(lvlSwingL[k], "SL", 1.5, false, false);
+                Add(lvlPP, "PP", 1.5, false, false);
+                Add(lvlR1, "R1", 1.2, false, false);
+                Add(lvlS1, "S1", 1.2, false, false);
+            }
+            if (ShowR2S2)
+            {
+                Add(lvlR2, "R2", 1.0, false, true);
+                Add(lvlS2, "S2", 1.0, false, true);
+            }
+            if (ShowR3S3)
+            {
+                Add(lvlR3, "R3", 0.8, false, true);
+                Add(lvlS3, "S3", 0.8, false, true);
+            }
+            // Weekly â€” PWH/PWL/WPOC are key (show lone when near price)
+            if (ShowWeeklyLevels)
+            {
+                Add(lvlPWH,     "PWH",  2.5, false, true);
+                Add(lvlPWL,     "PWL",  2.5, false, true);
+                Add(lvlWeekPOC, "WPOC", 2.5, false, true);
+                Add(lvlWeekVAH, "WVAH", 2.0, false, false);
+                Add(lvlWeekVAL, "WVAL", 2.0, false, false);
+            }
+            // Monthly â€” key
+            if (ShowMonthlyLevels)
+            {
+                Add(lvlPMH, "PMH", 2.0, false, true);
+                Add(lvlPML, "PML", 2.0, false, true);
+            }
+            // Opening range (once complete)
+            if (orComplete && ShowOR) { Add(lvlORH, "ORH", 1.2, false, false); Add(lvlORL, "ORL", 1.2, false, false); }
+            // 4H swings
+            if (ShowSwingLevels)
+                for (int k = 0; k < 3; k++)
+                {
+                    Add(lvlSwingH[k], "SH" + (k + 1), 1.5, false, false);
+                    Add(lvlSwingL[k], "SL" + (k + 1), 1.5, false, false);
+                }
+            // Range extremes: overall RTH high/low across the lookback window.
+            // Ensures a reference wall exists below AND above price on big breakout days
+            // when all session structure has been breached (e.g. flash crash below S3/YL).
+            {
+                int    span = Math.Min(CurrentBar, MAX_LOOKBACK_DAILY);
+                double rHi  = double.MinValue;
+                double rLo  = double.MaxValue;
+                for (int i = 0; i < span; i++)
+                {
+                    if (!IsRTHBar(Time[i].TimeOfDay)) continue;
+                    if (High[i] > rHi) rHi = High[i];
+                    if (Low[i]  < rLo) rLo = Low[i];
+                }
+                if (rHi > double.MinValue) Add(rHi, "RH", 1.5, true,  false);
+                if (rLo < double.MaxValue) Add(rLo, "RL", 1.5, true,  false);
             }
         }
 
@@ -1631,11 +1548,15 @@ namespace NinjaTrader.NinjaScript.Indicators
             var below = new List<Wall>();
             foreach (var w in walls)
             {
-                bool hasAnchor = WallHasAnchor(w);              // always shown
-                bool inRange   = Math.Abs(w.Center - price) <= rangeAbs;
-                bool keepLone  = hasAnchor || (WallHasKey(w) && inRange);
-                if (w.Count < MinConfluence && !keepLone) continue;   // lone non-key minor level
-                if (!inRange && !hasAnchor) continue;                 // out of range (key needs range too)
+                bool hasAnchor  = WallHasAnchor(w);
+                bool hasKey     = WallHasKey(w);
+                bool inRange    = Math.Abs(w.Center - price) <= rangeAbs;
+                // IsKey walls (S2/S3/R2/R3/PWH/PWL/etc.) get 3x range so they remain
+                // visible on volatile days where S2 can be 900+ pts from price.
+                bool keyInRange = hasKey && Math.Abs(w.Center - price) <= rangeAbs * 3.0;
+                bool keepLone   = hasAnchor || keyInRange;
+                if (w.Count < MinConfluence && !keepLone) continue;
+                if (!inRange && !hasAnchor && !keyInRange) continue;
                 if (w.Center >= price) above.Add(w); else below.Add(w);
             }
 
@@ -1646,6 +1567,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             int idx = 0;
             foreach (var w in keep)
                 DrawWall(w, price, idx++);
+            lastKeptWalls = keep;
+            DrawLegend();
+            DrawNakedPOCs();
         }
 
         private void DrawWall(Wall w, double price, int idx)
@@ -1658,8 +1582,10 @@ namespace NinjaTrader.NinjaScript.Indicators
             string tagLine = tagBand + "_C";
             string tagLbl  = tagBand + "_L";
 
-            // Member-code string (cap listed at 4)
+            // Codes sorted by reference priority (improvement 3)
             var codes = w.Members.Select(m => m.Code).ToList();
+            var prio = new[] {"WPOC","WVAH","WVAL","PWH","PWL","PMH","PML","ONH","ONL","YH","YL","YC","SH1","SH2","SH3","SL1","SL2","SL3","POC","VAH","VAL","R1","S1","R2","S2","R3","S3","PP","RH","RL","ORH","ORL"};
+            codes = codes.OrderBy(c => { int pi = Array.IndexOf(prio, c); return pi < 0 ? 99 : pi; }).ToList();
             string codeStr = codes.Count <= 4
                 ? string.Join("+", codes)
                 : string.Join("+", codes.Take(4)) + "+" + (codes.Count - 4);
@@ -1688,6 +1614,20 @@ namespace NinjaTrader.NinjaScript.Indicators
                     RegWall(tagLine);
                 }
                 catch (Exception ex) { Print(LOG_PREFIX + " Wall line error: " + ex.Message); }
+
+                if (ShowApproachBands && w.Count >= 3)
+                {
+                    double bandPts     = ApproachBandWidth * TickSize;
+                    string tagApproach = tagBand + "_A";
+                    Brush  aFill       = WithOpacity(baseColor, 0.08);
+                    try
+                    {
+                        Draw.RegionHighlightY(this, tagApproach, false,
+                            w.Hi + bandPts, w.Lo - bandPts, Brushes.Transparent, aFill, 8);
+                        RegWall(tagApproach);
+                    }
+                    catch (Exception ex) { Print(LOG_PREFIX + " Approach band error: " + ex.Message); }
+                }
             }
             else
             {
@@ -1701,24 +1641,40 @@ namespace NinjaTrader.NinjaScript.Indicators
                 catch (Exception ex) { Print(LOG_PREFIX + " Anchor line error: " + ex.Message); }
             }
 
+            // HVOL band (improvement 11)
+            bool isHvol = false;
+            if (isWall && dayProfileAvg > 0)
+            {
+                double zv  = GetZoneVolume(w.Lo, w.Hi);
+                int    n   = (int)Math.Round(Math.Abs(w.Hi - w.Lo) / TickSize) + 1;
+                double za  = n > 0 ? zv / n : 0;
+                isHvol     = (zv > 0 && za >= dayProfileAvg);
+            }
+            if (ShowHVOLBands && isHvol)
+            {
+                string tagHvol = tagBand + "_HV";
+                Brush  hFill   = WithOpacity(Brushes.Gold, 0.12);
+                Brush  hBorder = WithOpacity(Brushes.Gold, 0.55);
+                try
+                {
+                    Draw.RegionHighlightY(this, tagHvol, false,
+                        w.Hi + TickSize, w.Lo - TickSize, hBorder, hFill, 12);
+                    RegWall(tagHvol);
+                }
+                catch (Exception ex) { Print(LOG_PREFIX + " HVOL band error: " + ex.Message); }
+            }
+
             if (ShowLabels)
             {
-                string stars = w.Count >= 4 ? " ****" : w.Count == 3 ? " ***" : w.Count == 2 ? " **" : "";
-                string side  = isResistance ? "R" : "S";
-                string hvol  = "";
-                if (isWall && dayProfileAvg > 0)
-                {
-                    double zv = GetZoneVolume(w.Lo, w.Hi);
-                    int    n  = (int)Math.Round(Math.Abs(w.Hi - w.Lo) / TickSize) + 1;
-                    double za = n > 0 ? zv / n : 0;
-                    if (zv > 0 && za >= dayProfileAvg) hvol = "  HVOL";
-                }
-                string text = side + " " + FormatPrice(w.Center) + stars + "  " + codeStr + hvol;
+                string stars   = w.Count >= 4 ? " ****" : w.Count == 3 ? " ***" : w.Count == 2 ? " **" : "";
+                string side    = isResistance ? "R" : "S";
+                string hvolTxt = (!ShowHVOLBands && isHvol) ? "  HVOL" : "";
+                string text    = side + " " + FormatPrice(w.Center) + stars + "  " + codeStr + hvolTxt;
                 Brush  txt  = isWall ? Brushes.White : WithOpacity(Brushes.White, 0.75);
                 int    fs   = isWall ? Math.Max(8, LabelFontSize) : Math.Max(7, LabelFontSize - 2);
                 try
                 {
-                    Draw.Text(this, tagLbl, true, text, 0, w.Center, 0,
+                    Draw.Text(this, tagLbl, true, text, -5, w.Center, 0,
                         txt, new SimpleFont("Arial", fs),
                         System.Windows.TextAlignment.Left,
                         Brushes.Transparent, WithOpacity(Brushes.Black, 0.70), 70);
@@ -1727,233 +1683,84 @@ namespace NinjaTrader.NinjaScript.Indicators
                 catch (Exception ex) { Print(LOG_PREFIX + " Wall label error: " + ex.Message); }
             }
         }
-        #endregion
 
-        // =================================================================
-        #region Proximity Activation (Tier 3)
-
-        private void CheckProximityActivation()
+        private void CalcNakedPOCs(DateTime today)
         {
-            if (CurrentBar < 1) return;
-            double cur    = Close[0];
-            double thresh = ProximityTicks * TickSize;
-
-            // Special 1M threshold
-            if (ChartRole == ChartRole.OneMinute) thresh = 20 * TickSize;
-
-            CheckAndActivate(TAG_PREFIX + "YH_"   + dateTag, lvlYH,  YHColor,  DashStyleHelper.Dash, "YH",   cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "YL_"   + dateTag, lvlYL,  YLColor,  DashStyleHelper.Dash, "YL",   cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "ONH_"  + dateTag, lvlONH, ONHColor, DashStyleHelper.Dot,  "ONH",  cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "ONL_"  + dateTag, lvlONL, ONLColor, DashStyleHelper.Dot,  "ONL",  cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "R2_"   + dateTag, lvlR2,  R2Color,  DashStyleHelper.Dot,  "R2",   cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "R3_"   + dateTag, lvlR3,  R3Color,  DashStyleHelper.Dot,  "R3",   cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "S2_"   + dateTag, lvlS2,  S2Color,  DashStyleHelper.Dot,  "S2",   cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "S3_"   + dateTag, lvlS3,  S3Color,  DashStyleHelper.Dot,  "S3",   cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "PWH_"  + dateTag, lvlPWH, PWHColor, DashStyleHelper.Dot,  "PWH",  cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "PWL_"  + dateTag, lvlPWL, PWLColor, DashStyleHelper.Dot,  "PWL",  cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "WPOC_" + dateTag, lvlWeekPOC,WeeklyPOCColor,DashStyleHelper.Dot,"WPOC",cur,thresh,3);
-            CheckAndActivate(TAG_PREFIX + "VAH_"  + dateTag, lvlVAH, VAHColor, DashStyleHelper.Dot,  "VAH",  cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "VAL_"  + dateTag, lvlVAL, VALColor, DashStyleHelper.Dot,  "VAL",  cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "PMH_"  + dateTag, lvlPMH, PMHColor, DashStyleHelper.Dot,  "PMH",  cur, thresh, 3);
-            CheckAndActivate(TAG_PREFIX + "PML_"  + dateTag, lvlPML, PMLColor, DashStyleHelper.Dot,  "PML",  cur, thresh, 3);
-            for (int k = 0; k < 3; k++)
+            nakedPOCPrices.Clear();
+            if (!ShowNakedPOC || NakedPOCLookback <= 0) return;
+            int maxBars = Math.Min(CurrentBar, MAX_LOOKBACK_DAILY);
+            double visitThresh = NakedPOCVisitThreshold * TickSize;
+            var sessions = new List<(DateTime date, double poc)>();
+            DateTime curDate = DateTime.MinValue;
+            var sesProfile = new Dictionary<double, double>();
+            double sesTotalVol = 0;
+            int daysFound = 0;
+            for (int i = 1; i < maxBars && daysFound < NakedPOCLookback; i++)
             {
-                CheckAndActivate(TAG_PREFIX + "SH" + k + "_" + dateTag, lvlSwingH[k], SwingHighColor, DashStyleHelper.Dot, "SH" + (k+1), cur, thresh, 3);
-                CheckAndActivate(TAG_PREFIX + "SL" + k + "_" + dateTag, lvlSwingL[k], SwingLowColor,  DashStyleHelper.Dot, "SL" + (k+1), cur, thresh, 3);
+                DateTime bd = Time[i].Date;
+                if (bd >= today) continue;
+                if (!IsRTHBar(Time[i].TimeOfDay)) continue;
+                if (bd != curDate)
+                {
+                    if (curDate != DateTime.MinValue && sesProfile.Count > 0)
+                    {
+                        double poc, vah, val;
+                        CalcValueArea(sesProfile, sesTotalVol, out poc, out vah, out val);
+                        if (poc > 0) { sessions.Add((curDate, poc)); daysFound++; }
+                    }
+                    curDate = bd; sesProfile.Clear(); sesTotalVol = 0;
+                }
+                AddToProfile(sesProfile, High[i], Low[i], Volume[i]);
+                sesTotalVol += Volume[i];
+            }
+            if (curDate != DateTime.MinValue && sesProfile.Count > 0 && daysFound < NakedPOCLookback)
+            {
+                double poc, vah, val;
+                CalcValueArea(sesProfile, sesTotalVol, out poc, out vah, out val);
+                if (poc > 0) sessions.Add((curDate, poc));
+            }
+            foreach (var (sDate, poc) in sessions)
+            {
+                bool visited = false;
+                if (sesHi > 0 && sesLo > 0 && sesLo <= poc + visitThresh && sesHi >= poc - visitThresh)
+                    visited = true;
+                else
+                {
+                    for (int i = 1; i < maxBars && !visited; i++)
+                    {
+                        DateTime bd = Time[i].Date;
+                        if (bd >= today || bd <= sDate) continue;
+                        if (!IsRTHBar(Time[i].TimeOfDay)) continue;
+                        if (Low[i] <= poc + visitThresh && High[i] >= poc - visitThresh) visited = true;
+                    }
+                }
+                if (!visited) nakedPOCPrices.Add(poc);
             }
         }
 
-        private void CheckAndActivate(string tag, double price, Brush color, DashStyleHelper dash,
-                                       string lbl, double cur, double thresh, int tier)
+        private void DrawNakedPOCs()
         {
-            if (price == 0) return;
-            if (tier3Activated.Contains(tag)) return; // already visible â€” stays visible
-            if (Math.Abs(cur - price) <= thresh)
-            {
-                tier3Activated.Add(tag);
-                DrawTier(tag, price, color, dash, 1, lbl, tier);
-                DetectAndDrawConfluence(); // re-run when new level becomes visible
-            }
-        }
-        #endregion
-
-        // =================================================================
-        #region Confluence Zone Detection
-
-        private void DetectAndDrawConfluence()
-        {
-            if (!ShowConfluenceZones) return;
-
-            // Remove old confluence rectangles for today
-            var oldCZ = drawnTags.Where(t => t.StartsWith(TAG_PREFIX + "CZ") && t.EndsWith("_" + dateTag)).ToList();
-            foreach (string t in oldCZ)
-            {
+            foreach (string t in nakedPOCTags.ToList())
                 try { RemoveDrawObject(t); } catch { }
-                drawnTags.Remove(t);
-                try { RemoveDrawObject(t + "_L"); } catch { }
-                drawnTags.Remove(t + "_L");
-            }
-
-            // Collect all currently VISIBLE levels (Tier 1 and Tier 2)
-            var visible = CollectVisibleLevels();
-            visible.Sort();
-
-            double czThresh = ConfluenceProximityTicks * TickSize;
-            var zones = new List<(double low, double high, List<string> names)>();
-
-            int i = 0;
-            while (i < visible.Count)
+            nakedPOCTags.Clear();
+            if (!ShowNakedPOC || nakedPOCPrices.Count == 0) return;
+            double visitThresh = NakedPOCVisitThreshold * TickSize;
+            for (int idx = nakedPOCPrices.Count - 1; idx >= 0; idx--)
             {
-                double zLow   = visible[i].price;
-                double zHigh  = visible[i].price;
-                var    zNames = new List<string> { visible[i].name };
-                int    j = i + 1;
-                while (j < visible.Count && visible[j].price - zLow <= czThresh)
-                {
-                    zHigh = visible[j].price;
-                    zNames.Add(visible[j].name);
-                    j++;
-                }
-                if (zNames.Count >= 2) zones.Add((zLow, zHigh, zNames));
-                i = j;
-            }
-
-            // Draw each confluence zone
-            for (int z = 0; z < zones.Count; z++)
-            {
-                var zone     = zones[z];
-                string czTag = TAG_PREFIX + "CZ" + z + "_" + dateTag;
-
-                string grade  = GradeConfluenceZone(zone.low, zone.high);
-                double opacity = grade.Contains("HIGH") ? 0.20 : grade.Contains("LOW") ? 0.10 : 0.15;
-
-                Brush fillBrush    = WithOpacity(ConfluenceZoneColor, opacity);
-                Brush borderBrush  = WithOpacity(ConfluenceZoneColor, 0.40);
-
+                double poc = nakedPOCPrices[idx];
+                if (sesHi > 0 && sesLo > 0 && sesLo <= poc + visitThresh && sesHi >= poc - visitThresh)
+                { nakedPOCPrices.RemoveAt(idx); continue; }
+                string tag = TAG_PREFIX + "NPOC_" + idx;
                 try
                 {
-                    Draw.Rectangle(this, czTag, false,
-                        CurrentBar, zone.high, 0, zone.low,
-                        borderBrush, fillBrush, (int)(opacity * 100.0));
-                    if (!drawnTags.Contains(czTag)) drawnTags.Add(czTag);
+                    Draw.HorizontalLine(this, tag, false, poc,
+                        WithOpacity(Brushes.Magenta, 0.80), DashStyleHelper.Dash, 1);
+                    nakedPOCTags.Add(tag);
                 }
-                catch (Exception ex) { Print(LOG_PREFIX + " DrawRect error: " + ex.Message); }
-
-                string lbl     = "CONFLUENCE â€” " + grade;
-                string lblTag  = czTag + "_L";
-                double midPrice = (zone.low + zone.high) / 2.0;
-                Brush  lblColor = WithOpacity(ConfluenceZoneColor, 0.80);
-                try
-                {
-                    Draw.Text(this, lblTag, lbl, 0, midPrice, lblColor);
-                    if (!drawnTags.Contains(lblTag)) drawnTags.Add(lblTag);
-                }
-                catch { }
-
-                if (ShowVerificationOutput)
-                {
-                    double zoneVol = GetZoneVolume(zone.low, zone.high);
-                    int    nLevels = (int)Math.Round(Math.Abs(zone.high - zone.low) / TickSize) + 1;
-                    double zoneAvg = nLevels > 0 ? zoneVol / nLevels : 0;
-                    Print(string.Format("{0} â”€â”€ CONFLUENCE ZONE {1} â”€â”€", LOG_PREFIX, z + 1));
-                    Print(string.Format("{0}   Levels: {1}", LOG_PREFIX, string.Join(" + ", zone.names)));
-                    Print(string.Format("{0}   Zone range: {1} to {2}", LOG_PREFIX, zone.low, zone.high));
-                    Print(string.Format("{0}   Profile volume in zone: {1:N0}", LOG_PREFIX, zoneVol));
-                    Print(string.Format("{0}   Profile average per level: {1:F1}", LOG_PREFIX, dayProfileAvg));
-                    Print(string.Format("{0}   Zone average per level: {1:F1}", LOG_PREFIX, zoneAvg));
-                    Print(string.Format("{0}   Grade: {1}", LOG_PREFIX, grade +
-                          (dayProfileAvg > 0 ? string.Format(" ({0:F1}x average)", zoneAvg / dayProfileAvg) : "")));
-                }
+                catch (Exception ex) { Print(LOG_PREFIX + " NakedPOC error: " + ex.Message); }
             }
         }
 
-        private string GradeConfluenceZone(double low, double high)
-        {
-            if (dayProfile.Count == 0 || dayProfileAvg == 0)
-                return "NO PRIOR VOL";
-
-            double zoneVol = GetZoneVolume(low, high);
-            int    nLevels = (int)Math.Round(Math.Abs(high - low) / TickSize) + 1;
-            double zoneAvg = nLevels > 0 ? zoneVol / nLevels : 0;
-
-            if (zoneVol == 0) return "NO PRIOR VOL";
-            return zoneAvg >= dayProfileAvg ? "HIGH VOL" : "LOW VOL";
-        }
-
-        private double GetZoneVolume(double low, double high)
-        {
-            if (dayProfile.Count == 0) return 0;
-            double vol = 0;
-            foreach (var kv in dayProfile)
-                if (kv.Key >= low - TickSize * 0.01 && kv.Key <= high + TickSize * 0.01)
-                    vol += kv.Value;
-            return vol;
-        }
-
-        // Returns sorted list of currently visible (T1/T2) level prices
-        private List<(double price, string name)> CollectVisibleLevels()
-        {
-            var list = new List<(double, string)>();
-
-            void Add(double p, string n) { if (p > 0) list.Add((p, n)); }
-
-            switch (ChartRole)
-            {
-                case ChartRole.Daily:
-                    if (ShowMonthlyLevels) { Add(lvlPMH,"PMH"); Add(lvlPML,"PML"); }
-                    if (ShowWeeklyLevels)  { Add(lvlPWH,"PWH"); Add(lvlPWL,"PWL"); Add(lvlWeekPOC,"WPOC"); Add(lvlWeekVAH,"WVAH"); Add(lvlWeekVAL,"WVAL"); Add(lvlCWH,"CWH"); Add(lvlCWL,"CWL"); }
-                    break;
-                case ChartRole.FourHour:
-                    if (ShowWeeklyLevels) { Add(lvlPWH,"PWH"); Add(lvlPWL,"PWL"); Add(lvlWeekPOC,"WPOC"); Add(lvlWeekVAH,"WVAH"); Add(lvlWeekVAL,"WVAL"); }
-                    if (ShowYH)  Add(lvlYH,"YH"); if (ShowYL) Add(lvlYL,"YL");
-                    if (ShowPOC) Add(lvlPOC,"POC");
-                    break;
-                case ChartRole.OneHour:
-                case ChartRole.FifteenMinute:
-                case ChartRole.ThreeMinute:
-                    if (ShowYH)     Add(lvlYH,"YH");    if (ShowYL)   Add(lvlYL,"YL");
-                    if (ShowPOC)    Add(lvlPOC,"POC");
-                    if (ShowPivots) { Add(lvlPP,"PP"); Add(lvlR1,"R1"); Add(lvlS1,"S1"); }
-                    if (ShowONH)    Add(lvlONH,"ONH");  if (ShowONL)  Add(lvlONL,"ONL");
-                    if (ShowVAH)    Add(lvlVAH,"VAH");  if (ShowVAL)  Add(lvlVAL,"VAL");
-                    if (orComplete && ShowOR) { Add(lvlORH,"ORH"); Add(lvlORL,"ORL"); }
-                    break;
-                case ChartRole.OneMinute:
-                    if (ShowPivots) Add(lvlPP,"PP");
-                    break;
-            }
-
-            // Also add any tier3 levels that have been activated
-            foreach (string t in tier3Activated)
-            {
-                // Extract level name from tag for labeling
-                string n = t.Replace(TAG_PREFIX,"").Replace("_" + dateTag,"");
-                double p = LevelFromTag(n);
-                if (p > 0) list.Add((p, n));
-            }
-
-            return list.Distinct().ToList();
-        }
-
-        private double LevelFromTag(string shortName)
-        {
-            switch (shortName)
-            {
-                case "YH": return lvlYH; case "YL": return lvlYL;
-                case "ONH": return lvlONH; case "ONL": return lvlONL;
-                case "PP": return lvlPP; case "R1": return lvlR1; case "S1": return lvlS1;
-                case "R2": return lvlR2; case "S2": return lvlS2;
-                case "R3": return lvlR3; case "S3": return lvlS3;
-                case "POC": return lvlPOC; case "VAH": return lvlVAH; case "VAL": return lvlVAL;
-                case "PWH": return lvlPWH; case "PWL": return lvlPWL;
-                case "WPOC": return lvlWeekPOC; case "WVAH": return lvlWeekVAH; case "WVAL": return lvlWeekVAL;
-                case "PMH": return lvlPMH; case "PML": return lvlPML;
-                case "ORH": return lvlORH; case "ORL": return lvlORL;
-                case "SH0": return lvlSwingH[0]; case "SH1": return lvlSwingH[1]; case "SH2": return lvlSwingH[2];
-                case "SL0": return lvlSwingL[0]; case "SL1": return lvlSwingL[1]; case "SL2": return lvlSwingL[2];
-                default: return 0;
-            }
-        }
         #endregion
 
         // =================================================================
@@ -1963,33 +1770,103 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (!ShowLegend) { try { RemoveDrawObject(TAG_PREFIX + "LEGEND"); } catch { } return; }
 
+            double price   = Close[0];
+            string ppBias  = lvlPP > 0 ? (price >= lvlPP ? "ABOVE PP" : "BELOW PP") : "PP n/a";
+            string ycBias  = lvlYC > 0 ? (price >= lvlYC ? "ABOVE YC" : "BELOW YC") : "YC n/a";
+            string biasArr = price >= lvlPP ? "↑" : "↓";
+
+            string[] prio = new string[] {"WPOC","WVAH","WVAL","PWH","PWL","PMH","PML","ONH","ONL","YH","YL","YC","SH1","SH2","SH3","SL1","SL2","SL3","POC","VAH","VAL","R1","S1","R2","S2","R3","S3","PP","RH","RL","ORH","ORL"};
+
+            var aboveWalls = lastKeptWalls.Where(w => w.Center >= price).OrderBy(w => w.Center).Take(3).ToList();
+            var belowWalls = lastKeptWalls.Where(w => w.Center <  price).OrderByDescending(w => w.Center).Take(3).ToList();
+            int rCount     = lastKeptWalls.Count(w => w.Center >= price);
+            int sCount     = lastKeptWalls.Count(w => w.Center <  price);
+
+            double rangePts  = 500.0;
+            int    rCount500 = lastKeptWalls.Count(w => w.Center >= price && w.Center <= price + rangePts);
+            int    sCount500 = lastKeptWalls.Count(w => w.Center <  price && w.Center >= price - rangePts);
+            string rDensity  = rCount500 == 0 ? "CLEAR" : rCount500 >= 4 ? "STACKED" : rCount500 == 1 ? "WIDE" : "NORMAL";
+            string sDensity  = sCount500 == 0 ? "CLEAR" : sCount500 >= 4 ? "STACKED" : sCount500 == 1 ? "WIDE" : "NORMAL";
+
+            string rrLine;
+            if (aboveWalls.Count > 0 && belowWalls.Count > 0)
+            {
+                double rDist = aboveWalls[0].Center - price;
+                double sDist = price - belowWalls[0].Center;
+                double rr    = sDist > 0 ? rDist / sDist : 0;
+                string rrSym = rr >= MinRRRatio ? "[OK]" : rr >= MinRRRatio - 0.5 ? "[~]" : "[X]";
+                rrLine = string.Format("  R/R {0:F2}x {1}  (R:+{2}  S:-{3} pts)", rr, rrSym, FormatPrice(rDist), FormatPrice(sDist));
+            }
+            else rrLine = "  R/R  n/a (no walls)";
+
+            double sesRange = (sesHi > 0 && sesLo > 0) ? sesHi - sesLo : 0;
+            string hiStr    = sesHi > 0 ? FormatPrice(sesHi) : "---";
+            string loStr    = sesLo > 0 ? FormatPrice(sesLo) : "---";
+            string rangeStr = sesRange > 0 ? FormatPrice(sesRange) + " pts" : "---";
+
+            TimeSpan now = Time[0].TimeOfDay;
+            string phase =
+                now < rthOpen                            ? "PRE-MARKET"    :
+                now < rthOpen  + new TimeSpan(0, 30, 0) ? "OPENING (30m)" :
+                now < rthOpen  + new TimeSpan(2,  0, 0) ? "MORNING"       :
+                now < rthClose - new TimeSpan(1,  0, 0) ? "MID-SESSION"   :
+                                                          "CLOSING";
+
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("THREE PILLARS - STRUCTURAL WALLS " + VERSION);
-            sb.AppendLine("Band = confluence zone; thicker + brighter = stronger");
-            sb.AppendLine("  **  2 levels    ***  3 levels    ****  4+ stacked");
-            sb.AppendLine("R = resistance (above)   S = support (below)");
-            sb.AppendLine("Dotted line = lone anchor (YH/YL/YC/POC/VAH/VAL)");
-            sb.AppendLine("HVOL = wall sits on heavy prior-day volume");
-            sb.AppendLine("Codes: YH/YL/YC  ONH/ONL  PP R1-3 S1-3  POC VAH/VAL");
-            sb.AppendLine("       PWH/PWL WPOC WVAH/WVAL  PMH/PML  SH/SL  ORH/ORL");
+            sb.AppendLine("═══ MARKET CONTEXT ═════════════════════");
+            sb.AppendLine("  Bias: " + biasArr + " " + ppBias + "  ·  " + ycBias);
+            sb.AppendLine("  ────────────────────────────────────");
+            if (aboveWalls.Count == 0)
+            {
+                sb.AppendLine("  (no resistance walls)");
+            }
+            else
+            {
+                for (int ri = 0; ri < aboveWalls.Count; ri++)
+                {
+                    var wR  = aboveWalls[ri];
+                    var csR = wR.Members.Select(m => m.Code).OrderBy(c => { int pi = Array.IndexOf(prio, c); return pi < 0 ? 99 : pi; }).Take(3);
+                    sb.AppendLine("  R" + (ri+1) + " " + FormatPrice(wR.Center) + "  [+" + FormatPrice(wR.Center - price) + " pts]  " + string.Join("+", csR));
+                }
+            }
+            sb.AppendLine("  ────────────────────────────────────");
+            if (belowWalls.Count == 0)
+            {
+                sb.AppendLine("  (no support walls)");
+            }
+            else
+            {
+                for (int si = 0; si < belowWalls.Count; si++)
+                {
+                    var wS  = belowWalls[si];
+                    var csS = wS.Members.Select(m => m.Code).OrderBy(c => { int pi = Array.IndexOf(prio, c); return pi < 0 ? 99 : pi; }).Take(3);
+                    sb.AppendLine("  S" + (si+1) + " " + FormatPrice(wS.Center) + "  [-" + FormatPrice(price - wS.Center) + " pts]  " + string.Join("+", csS));
+                }
+            }
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.AppendLine(rrLine);
+            sb.AppendLine("  Density: R " + rDensity + "  S " + sDensity);
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.AppendLine("  Session  Hi:" + hiStr + "  Lo:" + loStr);
+            sb.AppendLine("  Range:   " + rangeStr);
+            sb.AppendLine("  Phase:   " + phase);
+            sb.AppendLine("  ────────────────────────────────────");
+            sb.Append    ("  **=cluster  ***=wall  ****=4+stacked");
 
             TextPosition tp;
             switch (LegendPosition)
             {
-                case TPMLegendPosition.TopRight:   tp = TextPosition.TopRight;    break;
-                case TPMLegendPosition.BottomLeft: tp = TextPosition.BottomLeft;  break;
-                case TPMLegendPosition.BottomRight:tp = TextPosition.BottomRight; break;
-                default:                           tp = TextPosition.TopLeft;     break;
+                case TPMLegendPosition.TopRight:    tp = TextPosition.TopRight;    break;
+                case TPMLegendPosition.BottomLeft:  tp = TextPosition.BottomLeft;  break;
+                case TPMLegendPosition.BottomRight: tp = TextPosition.BottomRight; break;
+                default:                            tp = TextPosition.TopLeft;     break;
             }
-
-            Brush textBrush = Brushes.White;
-            Brush bgBrush   = WithOpacity(Brushes.Black, 0.80);
 
             try
             {
                 Draw.TextFixed(this, TAG_PREFIX + "LEGEND", sb.ToString(), tp,
-                    textBrush, new SimpleFont("Courier New", 11),
-                    Brushes.Gray, bgBrush, 85);
+                    Brushes.White, new SimpleFont("Courier New", 11),
+                    Brushes.SteelBlue, WithOpacity(Brushes.Black, 0.85), 90);
             }
             catch (Exception ex) { Print(LOG_PREFIX + " Legend error: " + ex.Message); }
         }
