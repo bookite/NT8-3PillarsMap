@@ -1305,6 +1305,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                 { vaVol += dnVol; val = sorted[dnIdx]; dnIdx--; }
             }
         }
+
+        private double GetZoneVolume(double low, double high)
+        {
+            if (dayProfile.Count == 0) return 0;
+            double vol = 0;
+            foreach (var kv in dayProfile)
+                if (kv.Key >= low - TickSize * 0.01 && kv.Key <= high + TickSize * 0.01)
+                    vol += kv.Value;
+            return vol;
+        }
         #endregion
 
         // =================================================================
