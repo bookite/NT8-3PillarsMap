@@ -1179,14 +1179,23 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             for (int i = strength; i < limit && (swHCount < 3 || swLCount < 3); i++)
             {
-                bool isSwingH = true, isSwingL = true;
-                for (int k = 1; k <= strength; k++)
-                {
-                    if (High[i] <= High[i - k] || High[i] <= High[i + k]) isSwingH = false;
-                    if (Low[i]  >= Low[i - k]  || Low[i]  >= Low[i + k])  isSwingL = false;
-                }
+                bool isSwingH, isSwingL;
+                IsSwingPivot(i, strength, out isSwingH, out isSwingL);
                 if (isSwingH && swHCount < 3) { lvlSwingH[swHCount++] = High[i]; }
                 if (isSwingL && swLCount < 3) { lvlSwingL[swLCount++] = Low[i];  }
+            }
+        }
+
+        // A bar at barsAgo qualifies as a swing high/low if it dominates `strength`
+        // bars on each side. Shared by CalcSwingLevels (top-3 confluence input) and
+        // CheckSwingMarkers (every-pivot visual marker) - same test, different callers.
+        private void IsSwingPivot(int barsAgo, int strength, out bool isHigh, out bool isLow)
+        {
+            isHigh = true; isLow = true;
+            for (int k = 1; k <= strength; k++)
+            {
+                if (High[barsAgo] <= High[barsAgo - k] || High[barsAgo] <= High[barsAgo + k]) isHigh = false;
+                if (Low[barsAgo]  >= Low[barsAgo - k]  || Low[barsAgo]  >= Low[barsAgo + k])  isLow = false;
             }
         }
 
@@ -1222,12 +1231,8 @@ namespace NinjaTrader.NinjaScript.Indicators
             int strength = SwingStrength;
             if (CurrentBar < strength * 2) return;
 
-            bool isSwingH = true, isSwingL = true;
-            for (int k = 1; k <= strength; k++)
-            {
-                if (High[strength] <= High[strength - k] || High[strength] <= High[strength + k]) isSwingH = false;
-                if (Low[strength]  >= Low[strength - k]  || Low[strength]  >= Low[strength + k])  isSwingL = false;
-            }
+            bool isSwingH, isSwingL;
+            IsSwingPivot(strength, strength, out isSwingH, out isSwingL);
 
             if (isSwingH) DrawSwingMarker(true,  strength, High[strength]);
             if (isSwingL) DrawSwingMarker(false, strength, Low[strength]);
